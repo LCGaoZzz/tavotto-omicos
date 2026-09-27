@@ -12,7 +12,9 @@ import {
   type AiAgentId,
   type AiCapabilities,
   type AiDeltaKind,
+  type AiRefreshOutcome,
 } from '@/lib/api'
+import type { UiMessage } from '@/i18n'
 
 export type AiStatus = 'running' | 'done' | 'failed' | 'timeout' | 'cancelled' | 'reverted'
 /** 改动作用范围：决定发给后端的上下文粒度（gid/label 怎么拼） */
@@ -48,6 +50,10 @@ export interface AiSession {
   changed: boolean
   diff: string
   error?: string
+  /** 改写脚本后的实际渲染失败；与 CLI 会话错误分开保留。 */
+  renderError?: UiMessage | null
+  /** 后端统一刷新结局，供会话卡显示“已写入但未刷新”。 */
+  refresh?: AiRefreshOutcome
   startedAt: number
 }
 
@@ -83,7 +89,15 @@ interface AiState {
     canvas?: string | null
   }) => Promise<void>
   appendDelta: (sid: string, kind: AiDeltaKind, text: string) => void
-  finish: (p: { session: string; status: string; changed: boolean; diff: string; error?: string }) => void
+  finish: (p: {
+    session: string
+    status: string
+    changed: boolean
+    diff: string
+    error?: string
+    refresh?: AiRefreshOutcome
+  }) => void
+  setRenderError: (sid: string, error: UiMessage | null) => void
   revert: (sid: string) => Promise<void>
   cancel: (sid: string) => Promise<void>
   clear: () => void
@@ -99,13 +113,9 @@ const LS_PREFS = 'tavotto.ai.prefs'
  * 崩——`effectiveAgent` 会落到第一个可用的，而用户的首选值留着。
  */
 function readAgent(): AiAgentId | null {
-  try {
-    const v = localStorage.getItem(LS_AGENT)
-    if (typeof v === 'string' && v.trim()) return v
-  } catch {
-    /* 用默认值 */
-  }
-  return null
+  // Figure Studio is an OmicOS-native surface.  Ignore legacy Codex/Claude
+  // preferences from older workbench builds so the first open is deterministic.
+  return 'omicos'
 }
 
 function readPrefs(): { models: AiState['models']; efforts: AiState['efforts'] } {
@@ -214,9 +224,17 @@ export const useAiStore = create<AiState>((set, get) => ({
     const effort = info?.efforts.length
       ? (get().efforts[agent] ?? info.default_effort ?? null)
       : null
+    const history = get().sessions
+      .filter((s) => s.panelId === panelId || s.fileId === fileId)
+      .slice(-4)
+      .flatMap((s) => [
+        { role: 'user' as const, content: s.prompt },
+        ...s.entries.filter((e) => e.kind === 'message').map((e) => ({ role: 'assistant' as const, content: e.text })),
+      ])
+      .slice(-8)
     const res = await aiRun({
       agent, id: fileId, prompt, gid, label, overrides,
-      model, effort, scope, target, canvas,
+      model, effort, scope, target, canvas, history,
     })
     const session: AiSession = {
       id: res.session,
@@ -233,6 +251,7 @@ export const useAiStore = create<AiState>((set, get) => ({
       status: 'running',
       changed: false,
       diff: '',
+      renderError: null,
       startedAt: Date.now(),
     }
     set((s) => ({ sessions: [...s.sessions, session] }))
@@ -263,7 +282,7 @@ export const useAiStore = create<AiState>((set, get) => ({
       }),
     })),
 
-  finish: ({ session, status, changed, diff, error }) =>
+  finish: ({ session, status, changed, diff, error, refresh }) =>
     set((s) => ({
       sessions: s.sessions.map((x) =>
         x.id === session
@@ -273,11 +292,20 @@ export const useAiStore = create<AiState>((set, get) => ({
               changed,
               diff,
               error,
+              refresh,
+              // 渲染失败可能先于 ai.done 到达；保留它，避免终态事件把
+              // 用户唯一可见的诊断清掉。
+              renderError: x.renderError ?? null,
               // 会话结束，光标不该继续闪
               entries: x.entries.map((e) => (e.streaming ? { ...e, streaming: false } : e)),
             }
           : x,
       ),
+    })),
+
+  setRenderError: (sid, error) =>
+    set((s) => ({
+      sessions: s.sessions.map((x) => (x.id === sid ? { ...x, renderError: error } : x)),
     })),
 
   revert: async (sid) => {

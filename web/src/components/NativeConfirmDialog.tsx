@@ -1,3 +1,4 @@
+import { FigureError } from '@/components/FigureError'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LoaderCircle } from '@/components/ui/icons'
@@ -5,7 +6,7 @@ import { ICON_SIZE } from '@/components/ui/Icon'
 import { Badge } from './ui/Badge'
 import { InlineWarning } from './settings/SettingRow'
 import { Checkbox } from './ui/Checkbox'
-import { backendCodeMsg } from '@/lib/api'
+
 import { t as translate, type UiMessage } from '@/i18n'
 import { useFormatMessage } from '@/i18n/react'
 import { useNativeSessionStore, type NativeError } from '@/store/nativeSessionStore'
@@ -204,7 +205,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 /** 后端的 code 在显示这一刻才翻（i18n 纪律：活得比一次渲染长的不存成品串）。 */
 function ErrorNote({
   error,
-  fmt,
+  fmt: _fmt,
 }: {
   error: NativeError | null
   fmt: (m: UiMessage | null | undefined) => string
@@ -212,7 +213,7 @@ function ErrorNote({
   if (!error) return null
   return (
     <InlineWarning tone="danger">
-      {fmt(backendCodeMsg(error.code, error.params, error.message))}
+      <FigureError error={error} context="script" />
     </InlineWarning>
   )
 }

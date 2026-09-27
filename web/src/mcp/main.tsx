@@ -8,6 +8,7 @@ import { McpApp } from './McpApp'
 import { McpProviders } from './McpProviders'
 import { installMcpTransport, seedSession, type OpenFigureResult } from './session'
 import '@/index.css'
+import '@/omicos-theme.css'
 
 /**
  * MCP App 画布的入口。

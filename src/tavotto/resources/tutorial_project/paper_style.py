@@ -1,7 +1,7 @@
 """教程项目的出版样式（自包含）。
 
 这个文件与真实项目里的 `paper_style.py` 扮演同一个角色：统一字号、线宽、
-配色，并提供 `save(fig, stem)`。Tavotto 会拦截 `save()` 里的 `fig.savefig`
+配色，并提供 `save(fig, stem)`。OmicOS 图形工作台会拦截 `save()` 里的 `fig.savefig`
 把 Figure 留在内存里，所以在编辑器里改元素**不会**重写磁盘上的 PDF。
 
 只用 matplotlib 自带的 STIX 字体：教程必须在 macOS / Windows / pip 环境里

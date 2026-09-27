@@ -1,3 +1,4 @@
+import { FigureError } from '@/components/FigureError'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Ban, Copy, Play, Settings, Square } from '@/components/ui/icons'
@@ -5,17 +6,12 @@ import { listRowClass } from '@/components/ui/listRow'
 import { cn } from '@/lib/utils'
 import { Details, Summary } from '@/components/ui/Details'
 import { ICON_SIZE } from '@/components/ui/Icon'
-import { backendCodeMsg, type CapturedFigureDescriptor, type ScriptInventoryEntry } from '@/lib/api'
+import { type CapturedFigureDescriptor, type ScriptInventoryEntry } from '@/lib/api'
 import { formatCm } from '@/lib/units'
-import { formatMessage, msg, t as translate } from '@/i18n'
+import { msg, t as translate } from '@/i18n'
 import { addRuntimePanel } from '@/store/actions'
 import { useScriptLibraryStore } from '@/store/scriptLibraryStore'
-import {
-  isBusyPhase,
-  needsNative,
-  useScriptRunStore,
-  type ScriptRunState,
-} from '@/store/scriptRunStore'
+import { isBusyPhase, needsNative, useScriptRunStore, type ScriptRunState } from '@/store/scriptRunStore'
 import { useUiStore } from '@/store/uiStore'
 import { Button, IconButton } from '../ui/Button'
 import { Dialog } from '../ui/Dialog'
@@ -75,7 +71,7 @@ export function ScriptLibrary({ query }: { query: string }) {
 
   if (error && !view) {
     return (
-      <p className="px-3 py-1.5 text-xs text-danger">{sc('loadFailed', { error })}</p>
+      <p className="px-3 py-1.5 text-xs text-danger"><FigureError error={error} context="script" /></p>
     )
   }
   if (!view) {
@@ -255,9 +251,7 @@ function StatusLine({
   } else if (phase === 'cancelled') {
     body = sc('cancelledNote')
   } else if (run?.error) {
-    const text = formatMessage(backendCodeMsg(run.error.code, run.error.params, run.error.message))
-    title = text
-    body = <span className="text-danger">{text}</span>
+    body = <FigureError error={run.error} context="script" />
   } else if (entry.registered) {
     body = sc('linkedCount', { count: stems.length })
   } else if (entry.reason === 'dynamic_stems' || entry.reason === 'unparseable') {
@@ -316,8 +310,8 @@ function FailureRecovery({ script, run }: { script: string; run: ScriptRunState 
         <Button
           variant="secondary"
           size="sm"
-          // 渲染环境卡片住在设置的「关于」段（EngineEnvironmentCard）
-          onClick={() => useUiStore.getState().setSettingsOpen(true, 'about')}
+          // 渲染环境卡片位于诊断页（EngineEnvironmentCard）
+          onClick={() => useUiStore.getState().setSettingsOpen(true, 'diagnostics')}
         >
           <Settings size={ICON_SIZE.sm} />
           {sc('openEnvSettings')}

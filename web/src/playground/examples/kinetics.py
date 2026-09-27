@@ -1,18 +1,19 @@
-import numpy as np
 import matplotlib.pyplot as plt
 
-t = np.linspace(0, 60, 200)
-fast = 1 - np.exp(-t / 8)
-slow = 1 - np.exp(-t / 24)
+states = ["Naive", "Memory", "Effector", "Cycling"]
+control = [34, 48, 22, 12]
+treated = [18, 37, 44, 29]
+x = list(range(len(states)))
 
 fig, ax = plt.subplots(figsize=(3.4, 2.5))
-ax.plot(t, fast, lw=1.4, label="Catalyst A")
-ax.plot(t, slow, lw=1.4, ls="--", label="Blank")
-ax.set_xlabel("Reaction time (min)")
-ax.set_ylabel("Conversion")
-ax.set_title("Reaction kinetics", fontsize=9)
-ax.set_xlim(0, 60)
-ax.set_ylim(0, 1.05)
-ax.legend(loc="lower right")
+width = 0.34
+ax.bar([i - width / 2 for i in x], control, width, label="Control")
+ax.bar([i + width / 2 for i in x], treated, width, label="Treated")
+ax.set_xlabel("Cell state")
+ax.set_ylabel("Score (%)")
+ax.set_title("Cell-state scores", fontsize=9)
+ax.set_xticks(x, states)
+ax.set_ylim(0, 60)
+ax.legend(loc="upper right")
 fig.tight_layout()
 fig.savefig("kinetics.pdf")

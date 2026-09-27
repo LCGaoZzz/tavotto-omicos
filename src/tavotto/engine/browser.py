@@ -107,10 +107,17 @@ def _patched_savefig(self, fname, *args, **kwargs):
 @contextlib.contextmanager
 def _real_output():
     global _intercept
+    # Recovered OmicOS scripts may install their own Figure.savefig filter to
+    # keep only the selected source stem. Engine-owned preview/render/export
+    # writes use cache paths or file-like buffers, so temporarily restore the
+    # worker's native method while the engine writes its result.
+    previous_savefig = mfigure.Figure.savefig
     _intercept = False
+    mfigure.Figure.savefig = _REAL_SAVEFIG
     try:
         yield
     finally:
+        mfigure.Figure.savefig = previous_savefig
         _intercept = True
 
 
@@ -230,7 +237,7 @@ class BrowserSession:
         log = _TailBuffer()
         try:
             with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
-                runpy.run_path(path, run_name="__main__")
+                script_namespace = runpy.run_path(path, run_name="__main__")
         except SyntaxError as exc:  # exec 期的（比如脚本自己 exec 别的串）
             return _err(
                 "syntax_error",
@@ -270,6 +277,17 @@ class BrowserSession:
         )
         for stem in fallback:
             self.capture_source[stem] = figcapture.SOURCE_PYPLOT
+
+        fallback, dropped_namespace = figcapture.collect_namespace_figures(
+            self.capture,
+            base,
+            script_namespace,
+            lambda value: isinstance(value, mfigure.Figure),
+            limit=MAX_FIGURES,
+        )
+        for stem in fallback:
+            self.capture_source[stem] = figcapture.SOURCE_PYPLOT
+        dropped += dropped_namespace
 
         truncated = dropped + max(0, len(self.capture) - MAX_FIGURES)
         if len(self.capture) > MAX_FIGURES:

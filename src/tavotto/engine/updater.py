@@ -273,3 +273,12 @@ def apply_upgrade() -> dict:
             },
         )
     return {"ok": ok, "command": " ".join(cmd), "restart_required": ok, "log": log[-8000:]}
+
+
+# OmicOS channel: updates belong to the host, never the public package index.
+_standalone_check = check
+_standalone_apply_upgrade = apply_upgrade
+def check(force=False):
+    return {"current": current_version(), "method": "source", "auto_check": False, "host_managed": True, "update_available": False, "can_self_update": False, "checked_at_ms": None, "repo_url": "./help.html#updates", "releases_url": "./help.html#updates"}
+def apply_upgrade():
+    return {"ok": False, "command": "", "restart_required": False, "log": "Updates are managed by OmicOS; the bundled runtime was not changed."}

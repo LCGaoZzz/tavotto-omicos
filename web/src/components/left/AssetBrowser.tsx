@@ -11,6 +11,7 @@ import {
   RefreshCw,
   SearchX,
   TriangleAlert,
+  Trash2,
   X,
   Zap,
   type IconComponent,
@@ -126,6 +127,14 @@ export function AssetBrowser() {
   const figuresOpen = useAssetBrowseStore((s) => s.figuresOpen)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [zoomed, setZoomed] = useState<LibraryItem | null>(null)
+  const hiddenIds = useAssetBrowseStore((s) => s.hiddenIds)
+  const hideAsset = useAssetBrowseStore((s) => s.hideAsset)
+  const hideAssets = useAssetBrowseStore((s) => s.hideAssets)
+  const [clearAllStep, setClearAllStep] = useState<0 | 1>(0)
+  const removeMaterial = (id: string) => {
+    hideAsset(id)
+    if (activeId === id) setActiveId(null)
+  }
   /** 后端刷新与素材重取合起来才是用户眼里的「正在刷新」 */
   const busy = refreshing || loading
 
@@ -212,8 +221,8 @@ export function AssetBrowser() {
     for (const asset of rt) {
       if (!placed.has(asset.id)) out.push({ kind: 'runtime', asset })
     }
-    return out
-  }, [panels, runtimeAssets, query, source, type, sort, usedOnly, usage, recentlyUsed])
+    return out.filter((it) => !hiddenIds.includes(itemId(it)))
+  }, [panels, runtimeAssets, query, source, type, sort, usedOnly, usage, recentlyUsed, hiddenIds])
 
   // 列数按实测宽度算：抽屉最窄 280px 时也是双列（每张卡 ~125px，预览 3:2 约 83px 高）——
   // 这是素材库而不是看图器，同屏能扫到的张数比单张预览的尺寸重要；看细节有空格键放大。
@@ -230,6 +239,7 @@ export function AssetBrowser() {
 
   useEffect(() => {
     if (activeId && !items.some((it) => itemId(it) === activeId)) setActiveId(null)
+    if (!items.length) setClearAllStep(0)
   }, [items, activeId])
 
   const focusCard = (id: string) => {
@@ -269,6 +279,8 @@ export function AssetBrowser() {
   // 区头上的计数：未筛选时就是全部素材数；筛选中写成「3 / 7」——此前这个比值单独占
   // 一行「文件夹信息 … 3」页脚，与「图 3」是同一个数说两遍（左栏审计 L04）
   const total = panels.length + (runtimeAssets?.length ?? 0)
+  const clearableIds = useMemo(() => items.map(itemId), [items])
+  const canClearAll = clearableIds.length > 0
   // 项目里一张图都没有时不写「图 0」：下面那句空态就是「项目里还没有图」，一行之隔说两遍
   // （同 L04）。筛到 0 条是另一回事——「0 / 7」告诉你还有 7 张只是没匹配上，那是有信息的
   const figuresCount =
@@ -307,6 +319,25 @@ export function AssetBrowser() {
             activeCount={chips.length}
             onChange={setFilters}
           />
+          {canClearAll && (
+            <IconButton
+              label={clearAllStep === 0 ? ab('clearAll') : ab('clearAllAgain')}
+              tip={clearAllStep === 0 ? ab('clearAllTip') : ab('clearAllAgainTip')}
+              active={clearAllStep === 1}
+              aria-pressed={clearAllStep === 1}
+              onClick={() => {
+                if (clearAllStep === 0) {
+                  setClearAllStep(1)
+                  return
+                }
+                hideAssets(clearableIds)
+                setClearAllStep(0)
+                setActiveId(null)
+              }}
+            >
+              <Trash2 size={ICON_SIZE.md} className={clearAllStep ? 'text-danger' : 'text-ink-2'} />
+            </IconButton>
+          )}
           <IconButton
             label={ab('refresh')}
             tip={ab('refreshTip')}
@@ -424,6 +455,7 @@ export function AssetBrowser() {
                     onOpen={() => openFastEdit(it.panel.id)}
                     onAdd={() => addFigureToLayout(it.panel.id)}
                     onZoom={() => setZoomed(it)}
+                    onRemove={() => removeMaterial(it.panel.id)}
                     onMove={(d) => move(it.panel.id, d)}
                     columns={columns}
                   />
@@ -438,6 +470,7 @@ export function AssetBrowser() {
                     onSelect={() => setActiveId(it.asset.id)}
                     onAdd={() => addFigureToLayout(it.asset.id)}
                     onZoom={() => setZoomed(it)}
+                    onRemove={() => removeMaterial(it.asset.id)}
                     onMove={(d) => move(it.asset.id, d)}
                     columns={columns}
                   />
@@ -691,6 +724,7 @@ function AssetCard({
   onOpen,
   onAdd,
   onZoom,
+  onRemove,
   onMove,
   columns,
 }: {
@@ -702,6 +736,7 @@ function AssetCard({
   onOpen: () => void
   onAdd: () => void
   onZoom: () => void
+  onRemove: () => void
   onMove: (delta: number) => void
   columns: number
 }) {
@@ -780,6 +815,7 @@ function AssetCard({
         <CardActions>
           <CardAction icon={Pencil} label={ab('openFigure')} title={ab('openAria', { name })} onClick={onOpen} />
           <CardAction icon={Plus} label={ab('addToCanvas')} title={ab('addAria', { name })} onClick={onAdd} />
+          <CardAction icon={X} label={ab('removeAsset')} title={ab('removeAssetTip')} onClick={onRemove} />
         </CardActions>
       </CardPreview>
 
@@ -836,6 +872,7 @@ function RuntimeAssetCard({
   onSelect,
   onAdd,
   onZoom,
+  onRemove,
   onMove,
   columns,
 }: {
@@ -847,6 +884,7 @@ function RuntimeAssetCard({
   onSelect: () => void
   onAdd: () => void
   onZoom: () => void
+  onRemove: () => void
   onMove: (delta: number) => void
   columns: number
 }) {
@@ -969,6 +1007,7 @@ function RuntimeAssetCard({
               onClick={primary}
             />
           )}
+          <CardAction icon={X} label={ab('removeAsset')} title={ab('removeAssetTip')} onClick={onRemove} />
         </CardActions>
       </CardPreview>
 
@@ -1105,18 +1144,16 @@ function CardMeta({
 const CARD_KEYSHORTCUTS = 'Enter Shift+Enter Space'
 
 /**
- * 卡片右下角的就近入口容器：只在悬停 / 键盘聚焦时出现。选中时不常驻——底部操作条
- * 已经写着同一对「编辑原图 / 添加到画布」，同一对动作两处同时可见就是重复
- * （2026-09-15 左栏审计 L08）。
+ * 卡片右下角的就近入口容器。删除是素材管理动作，必须常驻可见；编辑/添加
+ * 继续保留悬停入口，避免把缩略图盖满。
  */
 function CardActions({ children }: { children: ReactNode }) {
   return (
     <span
       data-card-actions
       className={cn(
-        'absolute bottom-1.5 right-1.5 flex items-center gap-1',
-        'opacity-0 transition-opacity duration-fast select-none',
-        'group-hover:opacity-100 group-focus-visible:opacity-100',
+        'absolute bottom-1.5 right-1.5 flex items-center gap-1 opacity-100',
+        'transition-opacity duration-fast select-none',
       )}
     >
       {children}

@@ -1,48 +1,25 @@
+import { FigureError } from '@/components/FigureError'
+import { diagnosticText } from '@/lib/figureError'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Bookmark, Copy, Layers2, Pencil, RotateCcw, Trash2, X,
-  RotateCcwClock,
-} from '@/components/ui/icons'
+import { Bookmark, Copy, Layers2, Pencil, RotateCcw, Trash2, X, RotateCcwClock } from '@/components/ui/icons'
 import { FIELD_BOX, FIELD_FOCUS } from '@/components/ui/fieldBox'
 import { ICON_SIZE } from '@/components/ui/Icon'
-import {
-  backendErrorText,
-  createVersion,
-  deleteVersion,
-  duplicateVersion,
-  fetchVersionDoc,
-  fetchVersions,
-  panelSrc,
-  updateVersion,
-  type LayoutVersionMeta,
-} from '@/lib/api'
+import { createVersion, deleteVersion, duplicateVersion, fetchVersionDoc, fetchVersions, panelSrc, updateVersion, type LayoutVersionMeta } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { resolveRestoreTarget } from '@/lib/versionTarget'
-import {
-  comparableEarlier,
-  versionDisplayName,
-  versionSummary,
-  versionSummaryText,
-} from '@/lib/versionSummary'
+import { comparableEarlier, versionDisplayName, versionSummary, versionSummaryText } from '@/lib/versionSummary'
 import { formatMessage, msg, t as translate } from '@/i18n'
 import { formatTime } from '@/i18n/format'
 import { useAssetStore } from '@/store/assetStore'
 import { useDocumentStore } from '@/store/documentStore'
 import { finishActiveGesture } from '@/store/gestureCoordinator'
 import { useVariantPng } from '@/hooks/useVariantPng'
-import {
-  documentDigest,
-  recordDiagnosticEvent,
-  versionHash,
-} from '@/diagnostics'
+import { documentDigest, recordDiagnosticEvent, versionHash } from '@/diagnostics'
 import { askConfirm, useUiStore } from '@/store/uiStore'
 import type { FigureDocument, PanelObject } from '@/types/document'
 import { canvasToDoc, objectLabel } from '@/types/document'
-import {
-  CanvasThumb,
-  THUMB_OBJECT_LIMIT,
-  THUMB_TEXT_CHARS,
-} from './CanvasThumb'
+import { CanvasThumb, THUMB_OBJECT_LIMIT, THUMB_TEXT_CHARS } from './CanvasThumb'
 import { DrawerCount } from './left/DrawerCount'
 import { Button, IconButton } from './ui/Button'
 import { EmptyState } from './ui/EmptyState'
@@ -108,7 +85,7 @@ export function VersionDrawer() {
       setVersions(list.slice().reverse()) // 最新在上
       setError(null)
     } catch (e) {
-      setError(backendErrorText(e))
+      setError(diagnosticText(e))
     }
   }, [docId])
 
@@ -138,7 +115,7 @@ export function VersionDrawer() {
     let alive = true
     fetchVersionDoc(docId, selected)
       .then((v) => alive && setSelectedDoc(v.doc))
-      .catch((e) => alive && setError(backendErrorText(e)))
+      .catch((e) => alive && setError(diagnosticText(e)))
     return () => {
       alive = false
     }
@@ -162,7 +139,7 @@ export function VersionDrawer() {
       await reload()
       useUiStore.getState().setStatus(msg('versions.saved', undefined, 'dialogs'))
     } catch (e) {
-      setError(backendErrorText(e))
+      setError(diagnosticText(e))
     } finally {
       setBusy(false)
     }
@@ -304,7 +281,7 @@ export function VersionDrawer() {
             ))}
           </ul>
         )}
-        {error && <p className="px-3 py-2 text-xs text-danger">{error}</p>}
+        {error && <p className="px-3 py-2 text-xs text-danger"><FigureError error={error} context="project" /></p>}
       </div>
     </aside>
   )

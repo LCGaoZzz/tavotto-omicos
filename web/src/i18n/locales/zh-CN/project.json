@@ -69,7 +69,7 @@
     "removeFromListTitle": "从列表移除，不删文件",
     "tagline": "项目是论文图所在的目录。选一个开始排版。",
     "tutorial": {
-      "start": "用示例了解 Tavotto",
+      "start": "用示例了解 OmicOS",
       "resume": "继续教程",
       "restart": "再看一遍教程"
     },
@@ -77,7 +77,7 @@
     "tutorialHint": "离线示例项目，随便改、随时重来，不会碰你自己的项目。",
     "tutorialLabel": "新手教程",
     "tutorialOpening": "准备中…",
-    "tutorialUnavailable": "教程资源不完整。请重新安装 Tavotto。"
+    "tutorialUnavailable": "教程资源不完整。请重新安装 OmicOS。"
   },
   "switcher": {
     "allProjects": "全部项目…",

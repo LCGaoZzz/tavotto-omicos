@@ -7,17 +7,17 @@
  *   1. 执行器与模型是**一个**紧凑选择器（审计 T37）；选不出第二项时不摆
  *      一个选不动的控件，但那一项写的是什么仍要看得见；
  *   2. 模型清单来自 caps，为空时不伪造模型；
- *   3. 推理强度是**真实能力数组驱动**的离散滑杆，档位数 = 数组长度，
- *      滑到第 i 格写的就是 efforts[i]，绝不生成数组里没有的值；
- *   4. 只有一档时滑杆不可调；一档都没有时整块不出现；
- *   5. 键盘方向键可调；
+ *   3. 推理强度是**真实能力数组驱动**的离散选项列表，选中的值就是
+ *      efforts[i]，绝不生成数组里没有的值；
+ *   4. 一档仍显示为可确认的选项；一档都没有时整块不出现；
+ *   5. 键盘 Tab / Enter 可达并可调；
  *   6. 正常状态不常驻快照 / CLI / 实现说明（2026-09-11 起弹层里也没有技术详情折叠，
  *      那些内容在设置 → 编码 Agent 的详情页）；
  *   7. 切 Agent 各自保留模型与强度偏好。
  *
  * 合并只是**呈现**：底下仍是 aiStore 的 agent 与 models[agent] 两个字段。
  * 「切到 B 再切回 A，A 的模型还是我上次选的」这条正是那个结构在被检验。
- * 推理强度的滑杆按需展开，**当前档位在收起时就写着**——藏起来的是控件不是值。
+ * 推理强度的选项列表按需展开，**当前档位在收起时就写着**——藏起来的是控件不是值。
  */
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -39,10 +39,10 @@ declare global {
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-/** codex 的真实形状：一个模型 + 六档强度（含用户配置带出来的 xhigh） */
+/** OmicOS 路由的真实形状：供应商/模型 + 六档强度。 */
 const codexSix = agentCaps({
-  models: ['gpt-5.6-sol'],
-  default_model: 'gpt-5.6-sol',
+  models: ['Zhipu Coding Plan/glm-5.3', 'Antigravity OAuth/Gemini 3.8 Flash'],
+  default_model: 'Zhipu Coding Plan/glm-5.3',
   efforts: ['minimal', 'low', 'medium', 'high', 'max', 'xhigh'],
   default_effort: 'xhigh',
 })
@@ -82,37 +82,31 @@ async function mount() {
 const textOf = () => host.textContent ?? ''
 const buttons = () => Array.from(host.querySelectorAll('button'))
 const range = () => host.querySelector('input[type="range"]') as HTMLInputElement | null
-/** 合成后的「执行器与模型」选择器；只有一项可选时它整个不存在 */
-const pairTrigger = () =>
-  host.querySelector('[role="combobox"][aria-label="执行器与模型"]') as HTMLElement | null
-/** Radix 的选项挂在 body 的 Portal 上，不在 host 里 */
-const pairOptions = async (): Promise<HTMLElement[]> => {
+const effortOptions = () =>
+  Array.from(host.querySelectorAll('[data-ai-effort="options"] [role="option"]')) as HTMLElement[]
+const providerTrigger = () => host.querySelector('[data-ai-provider="select"] [role="combobox"]') as HTMLElement | null
+const modelTrigger = () => host.querySelector('[data-ai-model="select"] [role="combobox"]') as HTMLElement | null
+/** Radix 的选项挂在 body 的 Portal 上，不在 host 里。 */
+const selectOptions = async (trigger: HTMLElement): Promise<HTMLElement[]> => {
   await act(async () => {
-    pairTrigger()!.click()
+    trigger.click()
   })
   return [...document.body.querySelectorAll('[role="option"]')] as HTMLElement[]
 }
-const pickPair = async (label: string) => {
-  const opts = await pairOptions()
+const pickOption = async (trigger: HTMLElement, label: string) => {
+  const opts = await selectOptions(trigger)
   const hit = opts.find((o) => o.textContent?.includes(label))
   expect(hit, `选项里没有「${label}」`).toBeTruthy()
   await act(async () => {
     hit!.click()
   })
 }
-/** 推理强度默认收起：要动滑杆先展开 */
+/** 推理强度默认收起：要选档位先展开 */
 const openEffort = async () => {
   const btn = buttons().find((b) => b.textContent?.includes('推理强度'))!
   await act(async () => {
     btn.click()
   })
-}
-
-function setRange(el: HTMLInputElement, v: string) {
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
-  setter.call(el, v)
-  el.dispatchEvent(new Event('input', { bubbles: true }))
-  el.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
 beforeEach(async () => {
@@ -130,43 +124,39 @@ afterEach(async () => {
 
 /* ------------------------------- Provider -------------------------------- */
 
-describe('执行器与模型（一个选择器）', () => {
-  it('只有一项可选时不摆选择器，但那一项写的是什么仍看得见', async () => {
-    // 一个 Agent + 一个模型 = 一种组合：选择器换成一行静态文字
+describe('供应商与模型', () => {
+  it('按已配置的路由分别显示供应商和模型选择器', async () => {
     useAiStore.setState({ caps: capsOf(codexSix) })
     await mount()
-    expect(pairTrigger()).toBeNull()
-    expect(textOf()).toContain('Codex · gpt-5.6-sol')
+    expect(providerTrigger()).toBeTruthy()
+    expect(modelTrigger()).toBeTruthy()
+    expect(textOf()).toContain('Zhipu Coding Plan')
+    expect(textOf()).toContain('glm-5.3')
   })
 
-  it('两个 Agent 的模型摊进同一个选择器，每项都带执行器名', async () => {
-    useAiStore.setState({ caps: capsOf(codexSix, claudeCaps()) })
+  it('切换供应商时写入该供应商的完整 provider/model 路由', async () => {
+    useAiStore.setState({ caps: capsOf(codexSix) })
     await mount()
-    expect(pairTrigger()).toBeTruthy()
-    const labels = (await pairOptions()).map((o) => o.textContent?.trim())
-    expect(labels).toEqual([
-      'Codex · gpt-5.6-sol',
-      'Claude Code · sonnet',
-      'Claude Code · opus',
-    ])
+    await pickOption(providerTrigger()!, 'Antigravity OAuth')
+    expect(useAiStore.getState().models.codex).toBe('Antigravity OAuth/Gemini 3.8 Flash')
+    expect(textOf()).toContain('Gemini 3.8 Flash')
   })
 
-  it('选一项：执行器与模型两个字段各写各的，不是一个合并出来的新字段', async () => {
-    useAiStore.setState({ caps: capsOf(codexSix, claudeCaps()) })
+  it('模型选项来自当前供应商，选择后保留完整路由', async () => {
+    useAiStore.setState({ caps: capsOf(codexSix) })
     await mount()
-    await pickPair('Claude Code · opus')
-    expect(useAiStore.getState().agent).toBe('claude')
-    expect(useAiStore.getState().models.claude).toBe('opus')
-    // codex 的模型记忆没有被这一次选择顺手改掉
-    expect(useAiStore.getState().models.codex).toBeUndefined()
+    await pickOption(providerTrigger()!, 'Antigravity OAuth')
+    await pickOption(modelTrigger()!, 'Gemini 3.8 Flash')
+    expect(useAiStore.getState().models.codex).toBe('Antigravity OAuth/Gemini 3.8 Flash')
   })
 
   it('一个可用的都没有时给恢复入口，不摆一个死掉的选择器', async () => {
     useAiStore.setState({ caps: capsOf(agentCaps({ usable: false, installed: false })) })
     await mount()
-    expect(pairTrigger()).toBeNull()
-    expect(range()).toBeNull()
-    expect(buttons().some((b) => b.textContent?.includes('打开编码 Agent 设置'))).toBe(true)
+    expect(providerTrigger()).toBeNull()
+    expect(modelTrigger()).toBeNull()
+    expect(effortOptions()).toHaveLength(0)
+    expect(buttons().some((b) => b.textContent?.includes('打开 OmicOS 设置'))).toBe(true)
   })
 
   /**
@@ -180,25 +170,25 @@ describe('执行器与模型（一个选择器）', () => {
    * e2e 那边的 `if` 才是安全的。
    */
   it('三个 e2e 锚点各自出现在它该出现的形态里', async () => {
-    // 两个 Agent → 选择器形态
-    useAiStore.setState({ caps: capsOf(codexSix, claudeCaps()) })
+    // 已配置供应商/模型 → 两个选择器形态
+    useAiStore.setState({ caps: capsOf(codexSix) })
     await mount()
-    expect(document.body.querySelector('[data-ai-agent-model="select"]')).toBeTruthy()
-    expect(document.body.querySelector('[data-ai-agent-model="static"]')).toBeNull()
-    // codex 支持推理强度 → 折叠入口在，默认收起
+    expect(document.body.querySelector('[data-ai-provider="select"]')).toBeTruthy()
+    expect(document.body.querySelector('[data-ai-model="select"]')).toBeTruthy()
+    // 支持推理强度 → 折叠入口在，默认收起
     const disclosure = document.body.querySelector('[data-ai-effort="disclosure"]')
     expect(disclosure).toBeTruthy()
     expect(disclosure!.getAttribute('aria-expanded')).toBe('false')
 
-    // 一个 Agent 一个模型 → 静态文字形态
+    // 清单为空 → 两个选择器都不出现
     await act(async () => {
       root?.unmount()
     })
     document.body.innerHTML = ''
-    useAiStore.setState({ caps: capsOf(codexSix) })
+    useAiStore.setState({ caps: capsOf(agentCaps({ models: [], default_model: null })) })
     await mount()
-    expect(document.body.querySelector('[data-ai-agent-model="select"]')).toBeNull()
-    expect(document.body.querySelector('[data-ai-agent-model="static"]')).toBeTruthy()
+    expect(document.body.querySelector('[data-ai-provider="select"]')).toBeNull()
+    expect(document.body.querySelector('[data-ai-model="select"]')).toBeNull()
 
     // 一个可用的都没有 → 两种形态都不出现，只剩恢复入口
     await act(async () => {
@@ -211,33 +201,26 @@ describe('执行器与模型（一个选择器）', () => {
     expect(document.body.querySelector('[data-ai-open-settings]')).toBeTruthy()
   })
 
-  it('每个 Agent 各自保留模型与强度偏好', async () => {
-    useAiStore.setState({ caps: capsOf(codexSix, claudeCaps()) })
+  it('切换供应商后仍保留各自的模型与强度偏好', async () => {
+    useAiStore.setState({ caps: capsOf(codexSix) })
     useAiStore.getState().setEffort('codex', 'low')
-    useAiStore.getState().setModel('claude', 'opus')
     await mount()
-    // 当前是 codex：展开强度后滑杆停在 low
+    // 当前是 codex：展开强度后选项列表勾在 low
     await openEffort()
-    expect(range()!.value).toBe('1') // ['minimal','low',...] → index 1
-    // 切到 claude：它没有强度，滑杆整块消失；模型保留 opus
-    await pickPair('Claude Code · opus')
-    expect(range()).toBeNull()
-    expect(textOf()).toContain('opus')
-    // 切回 codex：强度还是 low（展开状态是弹层自己的，切一圈回来它还开着）
-    await pickPair('Codex · gpt-5.6-sol')
-    expect(range()!.value).toBe('1')
+    expect(effortOptions().find((o) => o.getAttribute('aria-selected') === 'true')?.textContent).toContain('低')
+    await pickOption(providerTrigger()!, 'Antigravity OAuth')
+    expect(textOf()).toContain('Gemini 3.8 Flash')
+    await pickOption(providerTrigger()!, 'Zhipu Coding Plan')
+    expect(effortOptions().find((o) => o.getAttribute('aria-selected') === 'true')?.textContent).toContain('低')
   })
 
-  it('记忆里的模型已不在清单里时照实显示它，不静默换成别的一项', async () => {
-    // 控件上写着 A、任务却交给 B，是最难查的一类错
+  it('记忆里的模型已不在清单里时回落到当前供应商的首项', async () => {
     useAiStore.setState({
-      caps: capsOf(codexSix, claudeCaps()),
-      agent: 'claude',
-      models: { claude: '已下架的模型' },
+      caps: capsOf(codexSix),
+      models: { codex: '已下架的模型' },
     })
     await mount()
-    const labels = (await pairOptions()).map((o) => o.textContent?.trim())
-    expect(labels[0]).toBe('Claude Code · 已下架的模型')
+    expect(textOf()).toContain('glm-5.3')
   })
 })
 
@@ -247,7 +230,7 @@ describe('模型选择', () => {
   it('模型清单来自 caps', async () => {
     useAiStore.setState({ caps: capsOf(claudeCaps()) })
     await mount()
-    expect(pairTrigger()).toBeTruthy()
+    expect(modelTrigger()).toBeTruthy()
     expect(textOf()).toContain('sonnet')
   })
 
@@ -256,7 +239,8 @@ describe('模型选择', () => {
       caps: capsOf(agentCaps({ models: [], default_model: null })),
     })
     await mount()
-    expect(pairTrigger()).toBeNull()
+    expect(providerTrigger()).toBeNull()
+    expect(modelTrigger()).toBeNull()
     // 静态那一行也不出现：没有模型名可写，编一个才是错的
     expect(textOf()).not.toContain('执行器与模型')
   })
@@ -264,40 +248,40 @@ describe('模型选择', () => {
 
 /* ------------------------------- 推理强度 -------------------------------- */
 
-describe('推理强度滑杆', () => {
-  it('档位数 = caps 的真实数组长度', async () => {
+describe('推理强度离散选择器', () => {
+  it('选项数 = caps 的真实数组长度', async () => {
     useAiStore.setState({ caps: capsOf(codexSix) })
     await mount()
     await openEffort()
-    const r = range()!
-    expect(r.min).toBe('0')
-    expect(r.max).toBe('5') // 六档 → 0..5
+    expect(effortOptions()).toHaveLength(codexSix.efforts.length)
+    expect(effortOptions().map((o) => o.getAttribute('data-ai-effort-option'))).toEqual(codexSix.efforts)
   })
 
-  it('滑到第 i 格写的就是 efforts[i]，不生成数组里没有的值', async () => {
+  it('选择第 i 项写的就是 efforts[i]，不生成数组里没有的值', async () => {
     useAiStore.setState({ caps: capsOf(codexSix) })
     await mount()
-    await openEffort()
     const list = codexSix.efforts
     for (const [i, expected] of list.entries()) {
+      await openEffort()
       await act(async () => {
-        setRange(range()!, String(i))
+        effortOptions()[i].click()
       })
       expect(useAiStore.getState().efforts.codex).toBe(expected)
       expect(list).toContain(useAiStore.getState().efforts.codex)
     }
   })
 
-  it('收起时当前档位就写着；展开后 aria-valuetext 与它一致（审计 T37）', async () => {
+  it('收起时当前档位就写着；展开后选项勾选与它一致（审计 T37）', async () => {
     useAiStore.setState({ caps: capsOf(codexSix) })
     useAiStore.getState().setEffort('codex', 'high')
     await mount()
     // 按需展示的是**控件**，不是值：没展开也读得出现在是哪一档
-    expect(range()).toBeNull()
+    expect(effortOptions()).toHaveLength(0)
     expect(textOf()).toContain('推理强度')
     expect(textOf()).toContain('高')
     await openEffort()
-    expect(range()!.getAttribute('aria-valuetext')).toBe('高')
+    const selected = effortOptions().find((o) => o.getAttribute('aria-selected') === 'true')
+    expect(selected?.textContent).toContain('高')
   })
 
   it('CLI 声明了表里没有的档位时回退原文，不显示空白', async () => {
@@ -306,23 +290,23 @@ describe('推理强度滑杆', () => {
     })
     await mount()
     await openEffort()
-    expect(range()!.getAttribute('aria-valuetext')).toBe('turbo')
+    expect(effortOptions().find((o) => o.getAttribute('aria-selected') === 'true')?.textContent).toBe('turbo')
   })
 
-  it('只有一档时滑杆不可调', async () => {
+  it('只有一档时仍使用可见的离散选项', async () => {
     useAiStore.setState({
       caps: capsOf(agentCaps({ efforts: ['medium'], default_effort: 'medium' })),
     })
     await mount()
     await openEffort()
-    expect(range()).toBeTruthy()
-    expect(range()!.disabled).toBe(true)
+    expect(effortOptions()).toHaveLength(1)
+    expect(effortOptions()[0].getAttribute('aria-selected')).toBe('true')
   })
 
   it('没有强度能力时整块不出现', async () => {
     useAiStore.setState({ caps: capsOf(claudeCaps()) })
     await mount()
-    expect(range()).toBeNull()
+    expect(effortOptions()).toHaveLength(0)
     expect(textOf()).not.toContain('推理强度')
   })
 
@@ -330,16 +314,17 @@ describe('推理强度滑杆', () => {
     useAiStore.setState({ caps: capsOf(codexSix), efforts: { codex: '不存在的档位' } })
     await mount()
     await openEffort()
-    expect(range()!.value).toBe('0')
+    expect(effortOptions()[0].getAttribute('aria-selected')).toBe('true')
   })
 
-  it('是原生 range：方向键与触摸免费拿到，且有可达名', async () => {
+  it('不用连续 range，离散选项有可达名和选中状态', async () => {
     useAiStore.setState({ caps: capsOf(codexSix) })
     await mount()
     await openEffort()
-    expect(range()!.tagName).toBe('INPUT')
-    expect(range()!.type).toBe('range')
-    expect(range()!.getAttribute('aria-label')).toBe('推理强度')
+    expect(range()).toBeNull()
+    expect(host.querySelector('[data-ai-effort="options"]')?.getAttribute('role')).toBe('listbox')
+    expect(host.querySelector('[data-ai-effort="options"]')?.getAttribute('aria-label')).toBe('推理强度')
+    expect(effortOptions().every((o) => o.getAttribute('role') === 'option')).toBe(true)
   })
 })
 

@@ -1,35 +1,20 @@
+import { FigureError } from '@/components/FigureError'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Check,
-  Download,
-  Lightbulb,
-  LoaderCircle,
-  Redo2,
-  Undo2,
-  ShieldCheck,
-  ShieldQuestionMark,
-  TriangleAlert,
-} from '@/components/ui/icons'
+import { Check, Download, Lightbulb, LoaderCircle, Redo2, Undo2, ShieldCheck, ShieldQuestionMark, TriangleAlert } from '@/components/ui/icons'
 import { ICON_SIZE } from '@/components/ui/Icon'
 import { Checkbox } from '@/components/ui/Checkbox'
 import { CanvasStage } from '@/canvas/CanvasStage'
 import { ElementInspector } from '@/components/inspector/ElementInspector'
 import { useEngineSync } from '@/hooks/useEngineSync'
-import { formatMessage, t as translate, type UiMessage } from '@/i18n'
+import { t as translate, type UiMessage } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { useDocumentStore } from '@/store/documentStore'
 import { usePanelRender } from '@/store/renderStore'
 import { useUiStore } from '@/store/uiStore'
 import type { PanelObject } from '@/types/document'
 import type { AppsBridge } from './appsBridge'
-import {
-  sessionIdFor,
-  unwrap,
-  type OpenFigureResult,
-  type PreflightIssuePayload,
-  type PreflightPayload,
-} from './session'
+import { sessionIdFor, unwrap, type OpenFigureResult, type PreflightIssuePayload, type PreflightPayload } from './session'
 
 /**
  * Codex 内嵌的 Tavotto 画布。
@@ -233,7 +218,7 @@ export function McpApp({
             notice.tone === 'ok' ? 'text-ink-2' : 'text-danger',
           )}
         >
-          {notice.text}
+          {notice.tone === 'ok' ? notice.text : <FigureError error={notice.text} context="bridge" />}
         </p>
       )}
 
@@ -291,9 +276,9 @@ function RenderState({
   if (error) {
     return (
       <span className="flex shrink-0 items-center gap-1 text-xs text-danger"
-            title={formatMessage(error)}>
+            title={mc('renderFailed')}>
         <TriangleAlert size={ICON_SIZE.sm} />
-        {mc('renderFailed')}
+        <FigureError error={error} context="render" />
       </span>
     )
   }

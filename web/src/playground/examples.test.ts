@@ -80,13 +80,13 @@ describe('playground 案例数据', () => {
     expect(Object.keys(manifest).sort()).toEqual(EXAMPLES.map((e) => e.id).sort())
   })
 
-  it('主推案例暴露标题 / 轴标签 / 图例 / 两条曲线，标题字号钉死在 9pt（引导任务的起点）', () => {
+  it('主推案例暴露标题 / 轴标签 / 图例 / 两组柱形，标题字号钉死在 9pt（引导任务的起点）', () => {
     const src = FEATURED_EXAMPLE.source
-    expect(src).toMatch(/set_title\("Reaction kinetics", fontsize=9\)/)
+    expect(src).toMatch(/set_title\("Cell-state scores", fontsize=9\)/)
     expect(src).toMatch(/set_xlabel/)
     expect(src).toMatch(/set_ylabel/)
     expect(src).toMatch(/legend/)
-    expect(src.match(/ax\.plot\(/g) ?? []).toHaveLength(2)
+    expect(src.match(/ax\.bar\(/g) ?? []).toHaveLength(2)
   })
 
   it('引导任务的判据合法：gid / prop / 目标值都是真实可验证的形状', () => {

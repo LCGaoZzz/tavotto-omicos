@@ -121,6 +121,11 @@ engine 目录平铺 import 它，Flask 父进程也 import 得动。
 
 from __future__ import annotations
 
+if __package__:
+    from . import importscope
+else:
+    import importscope
+
 import builtins
 import dataclasses
 import hashlib
@@ -132,6 +137,7 @@ import pathlib
 __all__ = [
     "savefig_stem",
     "collect_pyplot_figures",
+    "collect_namespace_figures",
     "fallback_stems",
     "install_relative_read_fallback",
     "MAX_PYPLOT_FALLBACK",
@@ -271,13 +277,15 @@ def source_fingerprint(
     return "sha256:" + hashlib.sha256(canon.encode("utf-8")).hexdigest()
 
 
-def find_original_artifact(project_root: str, stem: str, *, isfile=os.path.isfile) -> str | None:
+def find_original_artifact(project_root: str, stem: str, *, isfile=os.path.isfile, script: str = "") -> str | None:
     """项目根下 stem 的原始产物（相对路径，POSIX）；没有回 None。
 
     判据与 handoff 交接找产物是同一份（它现在就调这里）：只看项目根一层、
     按 `ARTIFACT_EXTS` 的顺序取第一个存在的。`isfile` 可注入是给测试与
     handoff 的 dry 场景用的。
     """
+    if importscope.namespace(script):
+        return importscope.original_artifact(project_root, script, stem, ARTIFACT_EXTS)
     for ext in ARTIFACT_EXTS:
         if isfile(os.path.join(project_root, stem + ext)):
             return stem + ext
@@ -453,6 +461,62 @@ def collect_pyplot_figures(
             continue
         seen.add(id(fig))
         pending.append(fig)
+    dropped = max(0, len(pending) - max(0, int(limit)))
+    if dropped:
+        pending = pending[: max(0, int(limit))]
+    stems = fallback_stems(capture.keys(), script_stem, len(pending))
+    for stem, fig in zip(stems, pending):
+        capture[stem] = fig
+    return stems, dropped
+
+
+def collect_namespace_figures(
+    capture: dict,
+    script_stem: str,
+    namespace: dict,
+    is_figure,
+    limit: int = MAX_PYPLOT_FALLBACK,
+) -> tuple[list[str], int]:
+    """补获脚本命名空间里仍可用、但已不在 pyplot 管理器中的 Figure。
+
+    OmicVerse/Scanpy 等库通常接受 ``ax=``，并且调用方很自然地在绘图后
+    ``plt.close(fig)``。这种写法会把 Figure 从 Gcf 管理器移除，但 Figure
+    对象本身和其 artist 仍然完整可用；只看 ``plt.get_fignums()`` 会把它
+    错报成 ``no_figures_captured``。调用方提供 ``is_figure``，让本模块保持
+    不依赖 matplotlib（worker 与 browser 仍共用同一份捕获语义）。
+
+    只检查一层命名空间值以及对象的 ``.figure`` 属性，不递归数据结构，避免
+    触碰 AnnData / pandas 等大型或带副作用的对象。捕获来源沿用 pyplot：这
+    类 Figure 没有被脚本显式 savefig 认领，不能宣称有可写回的原始产物。
+    """
+    if not isinstance(namespace, dict):
+        return [], 0
+    seen = {id(f) for f in capture.values()}
+    pending = []
+    for value in namespace.values():
+        candidate = None
+        try:
+            if is_figure(value):
+                # Do not resurrect an intentionally closed, empty throwaway
+                # figure (a common pattern in multi-panel scripts). A Figure
+                # with axes is a real render candidate; an Axes-like value is
+                # handled by the branch below and supplies its parent Figure.
+                candidate = value if getattr(value, "axes", None) else None
+            else:
+                candidate = getattr(value, "figure", None)
+        except Exception:  # noqa: BLE001 - 用户对象的属性可自定义
+            candidate = None
+        if candidate is None:
+            continue
+        try:
+            valid = is_figure(candidate)
+        except Exception:  # noqa: BLE001 - 防御不可靠的 predicate
+            valid = False
+        if not valid or id(candidate) in seen:
+            continue
+        seen.add(id(candidate))
+        pending.append(candidate)
+
     dropped = max(0, len(pending) - max(0, int(limit)))
     if dropped:
         pending = pending[: max(0, int(limit))]

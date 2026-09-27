@@ -26,8 +26,8 @@ import {
 } from '@/store/actions'
 import { requestRelinkMissing } from '@/lib/clipboard'
 import { runUndoRedo } from '@/hooks/useKeyboard'
-import { createPackage, openPackage } from '@/lib/api'
-import { PRODUCT_NAME } from '@/lib/brand'
+import { createPackage, openPackage, backendErrorMsg } from '@/lib/api'
+import { productName } from '@/lib/brand'
 import { foreignProjectLabel } from '@/lib/projectLabel'
 import { currentProjectId } from '@/lib/session'
 import { insertShape } from '@/lib/presets'
@@ -132,11 +132,7 @@ async function exportPackage() {
     ui.setStatus(msg('status.packaged', { name: res.name, count: res.assets }, 'workspace'))
   } catch (e) {
     ui.setStatus(
-      msg(
-        'status.packageFailed',
-        { error: e instanceof Error ? e.message : String(e) },
-        'workspace',
-      ),
+      Object.assign(backendErrorMsg(e), { code: 'FIGURE_OPERATION_FAILED' }),
       'error',
     )
   }
@@ -154,7 +150,7 @@ function importPackage() {
   // `.magplot` 是 0.7 时代导出的同结构包（P1-08 迁移路的一部分）：读取端
   // 本来就打得开，只有这个文件选择器会把它滤掉——所以列进来。写出永远是
   // .tavotto，这不是运行时兼容层回潮。
-  input.accept = '.tavotto,.magplot,.zip,application/zip'
+  input.accept = '.omicos-figure,.tavotto,.magplot,.zip,application/zip'
   input.onchange = async () => {
     const file = input.files?.[0]
     if (!file) return
@@ -173,11 +169,7 @@ function importPackage() {
       }
     } catch (e) {
       ui.setStatus(
-        msg(
-          'status.packageOpenFailed',
-          { error: e instanceof Error ? e.message : String(e) },
-          'workspace',
-        ),
+        Object.assign(backendErrorMsg(e), { code: 'FIGURE_PROJECT_INCOMPATIBLE' }),
         'error',
       )
     }
@@ -188,9 +180,9 @@ function importPackage() {
 /** 图形标 + 实时文字 */
 function Brand() {
   return (
-    <span className="flex shrink-0 items-center gap-2 text-sm font-medium tracking-tight text-ink">
+    <span data-omicos-brand className="flex shrink-0 items-center gap-2 text-sm font-medium tracking-tight text-ink">
       <BrandMark size={20} />
-      {PRODUCT_NAME}
+      {productName()}
     </span>
   )
 }

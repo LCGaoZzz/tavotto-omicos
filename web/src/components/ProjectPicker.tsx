@@ -1,36 +1,15 @@
+import { FigureError } from '@/components/FigureError'
+import { diagnosticText } from '@/lib/figureError'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  TriangleAlert,
-  ArrowUp,
-  BookOpen,
-  ChevronRight,
-  CornerDownLeft,
-  Folder,
-  FolderOpen,
-  FolderPlus,
-  HardDrive,
-  X,
-} from '@/components/ui/icons'
+import { TriangleAlert, ArrowUp, BookOpen, ChevronRight, CornerDownLeft, Folder, FolderOpen, FolderPlus, HardDrive, X } from '@/components/ui/icons'
 import { ICON_SIZE } from '@/components/ui/Icon'
-import {
-  backendErrorText,
-  ApiError,
-  browseDirs,
-  type BrowseResult,
-  type DirEntry,
-  type RecentProject,
-} from '@/lib/api'
+import { ApiError, browseDirs, type BrowseResult, type DirEntry, type RecentProject } from '@/lib/api'
 import { isDesktop, pickDirectory } from '@/lib/desktop'
 import { t as translate } from '@/i18n'
-import { useFormatMessage } from '@/i18n/react'
-import { PRODUCT_NAME } from '@/lib/brand'
-import {
-  loadTutorialStatus,
-  runTutorialEntry,
-  tutorialEntry,
-  useTutorialStore,
-} from '@/lib/onboarding/tutorial'
+
+import { productName } from '@/lib/brand'
+import { loadTutorialStatus, runTutorialEntry, tutorialEntry, useTutorialStore } from '@/lib/onboarding/tutorial'
 import { checkProjectName, type ProjectNameProblem } from '@/lib/projectName'
 import { disambiguateRecent, splitRecent, submitTargetFor } from '@/lib/recentProjects'
 import { cn } from '@/lib/utils'
@@ -81,7 +60,7 @@ export function ProjectPicker() {
     try {
       await open(path, create)
     } catch (e) {
-      setError(backendErrorText(e))
+      setError(diagnosticText(e))
     } finally {
       setBusyPath(null)
     }
@@ -99,7 +78,7 @@ export function ProjectPicker() {
           {/* 标题走 type-title（15 / 500），字距 0（全面打磨 D44，§6：负字距是自造的第七种排法） */}
           <h1 className="type-title flex items-center gap-2.5">
             <BrandMark size={24} tone="paper" />
-            {PRODUCT_NAME}
+            {productName()}
           </h1>
           <p className="mt-1 text-xs leading-relaxed text-ink-3">{t('picker.tagline')}</p>
 
@@ -182,7 +161,7 @@ export function ProjectPicker() {
 
           {error && (
             <p role="alert" className="mt-3 text-xs leading-relaxed text-danger">
-              {error}
+              <FigureError error={error} context="project" />
             </p>
           )}
 
@@ -265,7 +244,6 @@ export function ProjectPicker() {
  */
 function TutorialEntry() {
   const { t } = useTranslation('project')
-  const fmt = useFormatMessage()
   const status = useTutorialStore((s) => s.status)
   const busy = useTutorialStore((s) => s.busy)
   const failure = useTutorialStore((s) => s.failure)
@@ -301,7 +279,7 @@ function TutorialEntry() {
       </p>
       {failure && failure.reason !== 'no_api' && failure.reason !== 'cancelled' && (
         <p role="alert" className="text-xs leading-relaxed text-danger">
-          {fmt(failure.message)}
+          <FigureError error={failure.message} context="project" />
         </p>
       )}
     </section>
@@ -493,7 +471,7 @@ export function DirBrowser({
       setNearest(null)
       if (!editingPath.current) setPathText(next.is_roots ? '' : next.path)
     } catch (e) {
-      setError(backendErrorText(e))
+      setError(diagnosticText(e))
       // 后端在「路径不存在」时附带最近的存在祖先，给一个一键跳转——
       // 手输路径打错一个字符不该只换来一句死报错
       const hint = e instanceof ApiError ? e.body.nearest : null
@@ -648,7 +626,7 @@ export function DirBrowser({
 
         {error && (
           <p className="text-xs text-danger">
-            {error}
+            <FigureError error={error} context="project" />
             {nearest && (
               <button
                 className="ml-2 underline outline-none focus-visible:focus-ring"

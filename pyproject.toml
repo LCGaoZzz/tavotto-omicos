@@ -45,6 +45,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+pdfium-preview = ["pypdfium2==5.8.0", "Pillow>=10,<13"]
 # 单环境安装：渲染 worker 直接用当前解释器，无需另找科学栈 python。
 # 上界跟着实测走（P1-05）：runtime-lock 与视觉基线在 matplotlib 3.11 /
 # numpy 2.x 上验证，matplotlib 的 minor 升版历史上多次破坏私有接口
@@ -63,6 +64,7 @@ ci = ["numpy>=1.24", "Pillow>=10"]
 
 [project.scripts]
 tavotto = "tavotto.cli_entry:main"
+omicos-figure = "tavotto.cli_entry:main"
 
 [project.urls]
 Homepage = "https://github.com/Tavotto/Tavotto"

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { t as translate } from '@/i18n'
 import { postDiagnosticsBundle, type TelemetrySettings } from '@/lib/api'
 import { buildDiagnosticPayload } from '@/diagnostics'
-import { PRODUCT_NAME } from '@/lib/brand'
+import { productName } from '@/lib/brand'
 import { TELEMETRY_DISCLOSED_EVENTS } from '@/lib/telemetryDisclosure'
 import { useTelemetryStore } from '@/store/telemetryStore'
 import { useUpdateStore } from '@/store/updateStore'
@@ -51,14 +51,14 @@ function ProductBlock({ version }: { version?: string }) {
       <BrandMark size={54} />
       <div className="flex min-w-0 flex-col gap-0.5">
         <p className="type-title">
-          {PRODUCT_NAME}
+          {productName()}
           {version && <span className="ml-1.5 font-mono text-sm font-normal text-ink-2">v{version}</span>}
         </p>
         <p className="type-caption">{st('about.tagline')}</p>
         <p className="type-meta">
           {st('about.licenseBefore')}{' '}
           <a
-            href="https://github.com/Tavotto/Tavotto"
+            href="./help.html#notices"
             target="_blank"
             rel="noreferrer"
             // 正文句子里的链接必须**不靠颜色**也能认出来（axe
@@ -135,12 +135,12 @@ function PrivacyBlock() {
       </SettingRow>
       {hard && (
         <p className="type-meta" data-telemetry-hard-detail>
-          {st('about.telemetry.hardDisabledDetail', { env: 'TAVOTTO_NO_TELEMETRY=1' })}
+          {st('about.telemetry.hardDisabledDetail', { env: 'OmicOS privacy policy' })}
         </p>
       )}
       <TelemetryDataDisclosure />
       <a
-        href="https://github.com/Tavotto/Tavotto/blob/main/docs/privacy.md"
+        href="./help.html#privacy"
         target="_blank"
         rel="noreferrer"
         className="self-start text-xs text-accent underline underline-offset-2"
@@ -223,7 +223,7 @@ export async function downloadDiagnostics(): Promise<void> {
   try {
     const a = document.createElement('a')
     a.href = url
-    a.download = `tavotto-diagnostics-${stampForFilename()}.zip`
+    a.download = `omicos-figure-diagnostics-${stampForFilename()}.zip`
     a.click()
   } finally {
     // 不撤销就是一条挂到刷新为止的引用，而 zip 全在内存里

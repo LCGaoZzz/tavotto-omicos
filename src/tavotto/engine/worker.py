@@ -42,6 +42,8 @@ import shutil
 import sys
 import time
 import traceback
+import ast
+import runpy
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -80,6 +82,153 @@ ProtocolError = wireproto.ProtocolError
 _ms = figsession.ms_since
 
 
+def _install_omicverse_compat() -> None:
+    """Keep common OmicVerse plots renderable in the managed worker.
+
+    OmicVerse's ``marker_heatmap`` has two portability traps: recent releases
+    require PyComplexHeatmap, which is not part of every analysis environment,
+    and they return without drawing when ``groupby`` is omitted.  Historical
+    OmicOS figures commonly pass a marker dictionary whose keys are the
+    AnnData row labels instead.  The compatibility path infers that grouping
+    and falls back to a regular Matplotlib heatmap when the optional backend is
+    unavailable.  It deliberately patches only this public helper; all other
+    OV functions keep their original behavior.
+    """
+    try:
+        import numpy as np
+        import pandas as pd
+        import omicverse as ov
+    except Exception:  # noqa: BLE001 - OV is optional for ordinary Matplotlib scripts
+        return
+    plotting = getattr(ov, "pl", None)
+    original = getattr(plotting, "marker_heatmap", None)
+    if not callable(original) or getattr(original, "__omicos_compat__", False):
+        return
+
+    def _dense(value):
+        if hasattr(value, "toarray"):
+            value = value.toarray()
+        return np.asarray(value, dtype=float)
+
+    def _groups(adata, marker_genes_dict, groupby):
+        if not isinstance(marker_genes_dict, dict) or not marker_genes_dict:
+            return adata, groupby
+        labels = [str(label) for label in marker_genes_dict]
+        if groupby:
+            return adata, groupby
+        try:
+            index = [str(value) for value in adata.obs.index]
+        except Exception:  # noqa: BLE001
+            return adata, groupby
+        # A marker dictionary keyed by the rows is the unambiguous form.  Do
+        # not guess for arbitrary AnnData objects with unrelated row labels.
+        if len(index) != len(labels) or set(index) != set(labels):
+            return adata, groupby
+        try:
+            copy = adata.copy()
+            key = "__omicos_marker_group"
+            copy.obs[key] = pd.Categorical(index, categories=labels, ordered=True)
+            return copy, key
+        except Exception:  # noqa: BLE001
+            return adata, groupby
+
+    def _fallback(
+        adata,
+        marker_genes_dict=None,
+        groupby=None,
+        color_map="RdBu_r",
+        use_raw=True,
+        standard_scale="var",
+        expression_cutoff=0.0,
+        bbox_to_anchor=(5, -0.5),
+        figsize=(8, 4),
+        spines=False,
+        fontsize=12,
+        show_rownames=True,
+        show_colnames=True,
+        save_path=None,
+        ax=None,
+    ):
+        del bbox_to_anchor  # retained for signature compatibility
+        if not isinstance(marker_genes_dict, dict) or not marker_genes_dict or not groupby:
+            return None
+        source = getattr(adata, "raw", None) if use_raw else None
+        source = source if source is not None else adata
+        names = [str(value) for value in getattr(source, "var_names", ())]
+        lookup = {name: i for i, name in enumerate(names)}
+        genes = []
+        for values in marker_genes_dict.values():
+            genes.extend([str(values)] if isinstance(values, str) else [str(value) for value in values])
+        genes = [gene for gene in genes if gene in lookup]
+        if not genes:
+            return None
+        matrix = _dense(source.X)
+        if matrix.ndim == 1:
+            matrix = matrix.reshape(-1, 1)
+        columns = [lookup[gene] for gene in genes]
+        matrix = matrix[:, columns]
+        values = [str(value) for value in adata.obs[groupby]]
+        labels = [str(label) for label in marker_genes_dict]
+        means, fractions = [], []
+        for label in labels:
+            mask = np.asarray([value == label for value in values], dtype=bool)
+            subset = matrix[mask]
+            means.append(np.nanmean(subset, axis=0) if subset.size else np.zeros(len(genes)))
+            fractions.append(np.mean(subset > expression_cutoff, axis=0) if subset.size else np.zeros(len(genes)))
+        means = np.nan_to_num(np.asarray(means, dtype=float))
+        fractions = np.nan_to_num(np.asarray(fractions, dtype=float))
+        if standard_scale == "var":
+            low = means.min(axis=0, keepdims=True)
+            span = means.max(axis=0, keepdims=True) - low
+            means = np.divide(means - low, span, out=np.zeros_like(means), where=span > 0)
+        elif standard_scale == "group":
+            low = means.min(axis=1, keepdims=True)
+            span = means.max(axis=1, keepdims=True) - low
+            means = np.divide(means - low, span, out=np.zeros_like(means), where=span > 0)
+        if ax is None:
+            import matplotlib.pyplot as plt
+            _, ax = plt.subplots(figsize=figsize)
+        fig = ax.figure
+        image = ax.imshow(means, aspect="auto", cmap=color_map)
+        ax.set_xticks(range(len(genes)))
+        ax.set_yticks(range(len(labels)))
+        ax.set_xticklabels(genes if show_colnames else [], rotation=90, fontsize=fontsize)
+        ax.set_yticklabels(labels if show_rownames else [], fontsize=fontsize)
+        ax.tick_params(length=0)
+        for spine in ax.spines.values():
+            spine.set_visible(bool(spines))
+        # Keep the fraction information visible without introducing a custom
+        # artist family that the manifest cannot edit.
+        for row in range(len(labels)):
+            for col in range(len(genes)):
+                if fractions[row, col] > 0:
+                    ax.add_patch(__import__("matplotlib").patches.Rectangle(
+                        (col - 0.5, row - 0.5), 1, 1, fill=False,
+                        edgecolor="white", linewidth=0.35, alpha=float(fractions[row, col]),
+                    ))
+        fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
+        fig.tight_layout()
+        if save_path is not None:
+            fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        return fig, ax
+
+    def compat_marker_heatmap(adata, marker_genes_dict=None, groupby=None, *args, **kwargs):
+        adapted, inferred_groupby = _groups(adata, marker_genes_dict, groupby)
+        try:
+            result = original(adapted, marker_genes_dict=marker_genes_dict, groupby=inferred_groupby, *args, **kwargs)
+            if result is not None:
+                return result
+        except (ImportError, ModuleNotFoundError) as exc:
+            if "PyComplexHeatmap" not in str(exc):
+                raise
+        if inferred_groupby:
+            return _fallback(adapted, marker_genes_dict, inferred_groupby, *args, **kwargs)
+        return None
+
+    compat_marker_heatmap.__omicos_compat__ = True
+    plotting.marker_heatmap = compat_marker_heatmap
+
+
 class SafeSession(figsession.LiveFigureSession):
     """safe 档的 LiveFigureSession：引擎自己写盘时摘掉 savefig 拦截。
 
@@ -105,10 +254,17 @@ def _patched_savefig(self, fname, *args, **kwargs):
 @contextlib.contextmanager
 def _real_output():
     global _intercept
+    # Recovered OmicOS scripts may install their own Figure.savefig filter to
+    # keep only the selected source stem. Engine-owned preview/render/export
+    # writes use cache paths or file-like buffers, so temporarily restore the
+    # worker's native method while the engine writes its result.
+    previous_savefig = mfigure.Figure.savefig
     _intercept = False
+    mfigure.Figure.savefig = _REAL_SAVEFIG
     try:
         yield
     finally:
+        mfigure.Figure.savefig = previous_savefig
         _intercept = True
 
 
@@ -142,6 +298,81 @@ class Worker(wireproto.V1Handler):
         super().__init__(SESSION)
 
     # ---------------- build ----------------
+    def _run_tolerant_top_level(self):
+        """在 OmicOS 历史脚本中跳过失败的独立探针语句，继续到正式出图段。
+
+        一些对话会把多段「探测 OmicVerse API」代码和最终作图代码拼进同一个
+        ``.py``。探测段引用了未定义的临时变量时，普通 Python 语义会让整个文件
+        在正式 ``savefig`` 之前停止。这里只作为一次受限的 NameError 恢复：先按
+        正常语义执行；只有 NameError 才进入这里，按顶层语句隔离执行，并把每个
+        被跳过的异常写入 worker 日志。语法错误、缺依赖、文件错误等仍然原样失败，
+        不猜测数据，也不改写用户脚本。
+        """
+        source = self.script.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(self.script))
+        future = []
+        rest = []
+        for node in tree.body:
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module == "__future__"
+            ):
+                future.append(node)
+            else:
+                rest.append(node)
+        guarded = []
+        for node in rest:
+            guarded.append(
+                ast.Try(
+                    body=[node],
+                    handlers=[
+                        ast.ExceptHandler(
+                            type=ast.Name(id="Exception", ctx=ast.Load()),
+                            name="_omicos_compat_exc",
+                            body=[
+                                ast.Expr(
+                                    value=ast.Call(
+                                        func=ast.Name(id="_omicos_compat_log", ctx=ast.Load()),
+                                        args=[ast.Name(id="_omicos_compat_exc", ctx=ast.Load())],
+                                        keywords=[],
+                                    )
+                                )
+                            ],
+                        )
+                    ],
+                    orelse=[],
+                    finalbody=[],
+                )
+            )
+        module = ast.Module(body=future + guarded, type_ignores=[])
+        ast.fix_missing_locations(module)
+        namespace = {
+            "__name__": "__main__",
+            "__file__": str(self.script),
+            "__cached__": None,
+            "__doc__": None,
+            "__loader__": None,
+            "__package__": None,
+            "__spec__": None,
+        }
+
+        def _log(exc):
+            print(
+                "[compat] 跳过历史脚本中的独立语句: "
+                f"{type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
+
+        namespace["_omicos_compat_log"] = _log
+        try:
+            from matplotlib.patches import FancyArrowPatch
+        except Exception:
+            pass
+        else:
+            namespace["FancyArrowPatch"] = FancyArrowPatch
+        exec(compile(module, str(self.script), "exec"), namespace, namespace)
+        return namespace
+
     def build(self, timings: dict | None = None) -> dict:
         """跑一次用户脚本，把产出的 Figure 全部收进内存。
 
@@ -256,6 +487,11 @@ class Worker(wireproto.V1Handler):
                 stem, fig, figcapture.SOURCE_SAVEFIG
             )
 
+        # OmicVerse is an optional analysis dependency.  If it is present,
+        # install the narrow compatibility shim before user code imports it so
+        # marker_heatmap figures remain renderable in a minimal worker env.
+        _install_omicverse_compat()
+
         # 脚本看到的 argv 必须是它自己的，不是 worker 的。不换的话
         # `sys.argv[1:]` 拿到的是 --script/--out-dir/--entry 这串内部参数，
         # 按参数命名输出的脚本会存出一堆叫 "--entry" 的图（试运行探测时
@@ -263,11 +499,23 @@ class Worker(wireproto.V1Handler):
         sys.argv = [str(self.script)]
 
         t_script = time.perf_counter()
+        script_namespace = None
         with contextlib.redirect_stdout(sys.stderr):
             if self.entry == "__main__":
-                import runpy  # noqa: PLC0415 — 内联脚本（fig4c / fig_models）
-
-                runpy.run_path(str(self.script), run_name="__main__")
+                try:
+                    script_namespace = runpy.run_path(str(self.script), run_name="__main__")
+                except NameError:
+                    # 只对未定义临时变量做一次恢复；其它异常仍保持原有失败语义。
+                    print(
+                        "[compat] 普通执行因 NameError 中断，重试独立顶层语句",
+                        file=sys.stderr,
+                    )
+                    self.session.capture.clear()
+                    self.session.capture_source.clear()
+                    _plt = sys.modules.get("matplotlib.pyplot")
+                    if _plt is not None:
+                        _plt.close("all")
+                    script_namespace = self._run_tolerant_top_level()
             else:
                 module = importlib.import_module(self.script.stem)
                 getattr(module, self.entry)()
@@ -296,6 +544,22 @@ class Worker(wireproto.V1Handler):
                     file=sys.stderr,
                 )
                 self.dropped_figures = dropped
+
+        if script_namespace is not None:
+            fallback, dropped = figcapture.collect_namespace_figures(
+                self.session.capture,
+                self.script.stem,
+                script_namespace,
+                lambda value: isinstance(value, mfigure.Figure),
+            )
+            for stem in fallback:
+                self.session.capture_source[stem] = figcapture.SOURCE_PYPLOT
+            if dropped:
+                print(
+                    f"[capture] 命名空间中的 Figure 超过上限，未捕获 {dropped} 张",
+                    file=sys.stderr,
+                )
+                self.dropped_figures += dropped
 
         self.session.instrument_all()
         self._descriptor_cache = self._build_descriptors()

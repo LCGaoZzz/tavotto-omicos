@@ -1,21 +1,12 @@
+import { FigureError } from '@/components/FigureError'
+import { diagnosticText } from '@/lib/figureError'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Plus, RefreshCw, TriangleAlert } from '@/components/ui/icons'
 import { Details, Summary } from '@/components/ui/Details'
 import { DiagnosticDisclosure, DiagnosticItem, SettingSection } from './SettingRow'
 import { ICON_SIZE } from '@/components/ui/Icon'
-import {
-  backendErrorText,
-  deleteAiEndpoint,
-  fetchAiInstallStatus,
-  patchAiAgent,
-  saveAiEndpoint,
-  setAiEndpointActive,
-  startAiInstall,
-  type AiAgentCaps,
-  type AiCapabilities,
-  type AiInstallState,
-} from '@/lib/api'
+import { deleteAiEndpoint, fetchAiInstallStatus, patchAiAgent, saveAiEndpoint, setAiEndpointActive, startAiInstall, type AiAgentCaps, type AiCapabilities, type AiInstallState } from '@/lib/api'
 import { t as translate } from '@/i18n'
 import { formatDateTime } from '@/i18n/format'
 import { Button } from '../ui/Button'
@@ -95,7 +86,7 @@ export function AgentDetailView({
       await done
       if (fn !== onRefreshed) await onRefreshed()
     } catch (e) {
-      setError(backendErrorText(e))
+      setError(diagnosticText(e))
     } finally {
       setBusy(false)
     }
@@ -169,7 +160,7 @@ export function AgentDetailView({
       {error && (
         <p role="alert" className="flex items-start gap-1.5 text-xs text-danger">
           <TriangleAlert size={ICON_SIZE.sm} aria-hidden className="mt-px shrink-0" />
-          <span className="min-w-0 flex-1">{error}</span>
+          <span className="min-w-0 flex-1"><FigureError error={error} context="bridge" /></span>
         </p>
       )}
 
@@ -374,7 +365,7 @@ function CustomExecutable({
       await onRefreshed()
       setDraft((cur) => (cur === submitted ? null : cur))
     } catch (e) {
-      setError(backendErrorText(e))     // 失败保留正在编辑的值
+      setError(diagnosticText(e))     // 失败保留正在编辑的值
     } finally {
       setBusy(false)
     }
@@ -452,7 +443,7 @@ function CustomExecutable({
       )}
       {error && (
         <p role="alert" className="text-xs text-danger">
-          {error}
+          <FigureError error={error} context="bridge" />
         </p>
       )}
     </div>

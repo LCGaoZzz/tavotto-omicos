@@ -1,3 +1,4 @@
+import { FigureError } from '@/components/FigureError'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronRight, X } from '@/components/ui/icons'
@@ -56,7 +57,7 @@ const Field = ({
       {children}
       {error && (
         <span role="alert" className="text-xs text-danger">
-          {error}
+          <FigureError error={error} context="bridge" />
         </span>
       )}
     </span>

@@ -1,3 +1,4 @@
+import { FigureError } from '@/components/FigureError'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useEnvStore } from '@/store/envStore'
@@ -84,7 +85,7 @@ export function EngineEnvironmentCard({ compact }: { compact?: boolean }) {
             <strong className="font-medium text-ink-2">{en('useOtherHintStrong')}</strong>
             {en('useOtherHintAfter')}
           </p>
-          {error && <p className="text-xs text-danger">{error}</p>}
+          {error && <p className="text-xs text-danger"><FigureError error={error} context="environment" /></p>}
         </>
       ) : (
         /* 动作是按钮，不是蓝字（全面打磨 D14，§1：accent 只给链接与焦点，不给动作）。
@@ -332,7 +333,7 @@ export function MissingDependencyCard({
         </div>
       </div>
 
-      {error && <p className="text-xs text-danger">{error}</p>}
+      {error && <p className="text-xs text-danger"><FigureError error={error} context="environment" /></p>}
     </div>
   )
 }

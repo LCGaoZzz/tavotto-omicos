@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
-import { i18n, msg, t } from '@/i18n'
+import { i18n, literal, msg, t } from '@/i18n'
 import {
   affectedAssetIdsOf,
+  affectedScriptsOf,
   affectedStemsOf,
   subscribeEvents,
   type ServerEvent,
@@ -25,6 +26,15 @@ const short = (id: string) => id.split('/').pop()?.replace(/\.[^.]+$/, '') ?? id
 const stemOf = (fileId: string) => short(fileId)
 /** 后端稳定错误码 → 当前语言的一句话（参数为空的那些） */
 const translateBackend = (code: string) => t(`backend.${code}`, { ns: 'errors' })
+
+/**
+ * 后端新版本会在 ai.done 前发 panel.file_changed；旧版本可能只发 ai.done。
+ * 记录已处理的 AI 刷新，避免新旧事件同时到达时重复排队；没有记录时由
+ * ai.done 自己按脚本精确重渲染当前画布上的面板，保证“已写入”不会停在旧图。
+ */
+const aiRefreshClaims: Array<{ scripts: string[]; stems: string[]; ids: string[] }> = []
+const claimMatches = (claim: (typeof aiRefreshClaims)[number], script: string) =>
+  claim.scripts.includes(script) || claim.stems.includes(stemOf(script))
 
 /** 冷启动耗时提示；light 没有提示（本来就快） */
 const costHint = (cost: string): string =>
@@ -89,10 +99,32 @@ export function handleServerEvent(ev: ServerEvent) {
     }
     case 'render.done':
       render.noteBuilding(ev.id, null)
+      // A worker shutdown can race invalidation. If the next render succeeds,
+      // the transient worker diagnostic must disappear from the assistant card.
+      {
+        const sessions = useAiStore.getState().sessions
+        const id = ev.id
+        const candidate = [...sessions]
+          .reverse()
+          .find((s) => (s.status === 'running' || s.changed) && s.fileId && (s.fileId === id || stemOf(s.fileId) === stemOf(id)))
+        if (candidate) useAiStore.getState().setRenderError(candidate.id, null)
+      }
       setStatus(msg('status.renderDone', { name: short(ev.id) }, 'workspace'))
       break
     case 'render.failed':
       render.noteBuilding(ev.id, null)
+      // 渲染错误不能只停留在会消失的状态栏：如果它是 AI 改脚本触发的，
+      // 绑定到最近一条对应会话，改图助手里会持续显示完整诊断。
+      {
+        const sessions = useAiStore.getState().sessions
+        const id = ev.id
+        const candidate = [...sessions]
+          .reverse()
+          .find((s) => (s.status === 'running' || s.changed) && s.fileId && (s.fileId === id || stemOf(s.fileId) === stemOf(id)))
+        if (candidate) {
+          useAiStore.getState().setRenderError(candidate.id, literal(ev.error || '渲染失败'))
+        }
+      }
       setStatus(
         msg(
           ev.error ? 'status.renderFailedWithError' : 'status.renderFailed',
@@ -104,6 +136,7 @@ export function handleServerEvent(ev: ServerEvent) {
       break
 
     case 'panel.file_changed': {
+      const scripts = new Set(affectedScriptsOf(ev))
       const stems = new Set(affectedStemsOf(ev))
       // stems 是脚本产出的面板名，映射回文档里用到的文件 id。
       // runtime 面板按持久化描述块的 stem 认领（id 是不透明标识，不反解）
@@ -114,7 +147,7 @@ export function handleServerEvent(ev: ServerEvent) {
             o.type === 'panel' &&
             (o.fileKind === 'runtime'
               ? o.source != null && stems.has(o.source.stem)
-              : stems.has(stemOf(o.fileId))),
+              : stems.has(stemOf(o.fileId)) || (o.script != null && scripts.has(o.script))),
         )
         .map((o) => (o as { fileId: string }).fileId)
       // 转入引擎跟踪 → useEngineSync 立刻按当前 overrides 冷重建，
@@ -122,7 +155,19 @@ export function handleServerEvent(ev: ServerEvent) {
       // runtime 面板：本会话跑过的与文件面板同一待遇（热重建）；只在
       // 重开文档、还没跑过的那些上 lazy 纪律才生效（renderTargets 的门）。
       // stale 判定一并作废，下次查询按新脚本重新判
-      render.markStale([...new Set(affected)])
+      const affectedIds = [...new Set(affected)]
+      render.markStale(affectedIds)
+      if (ev.reason === 'ai' && affectedIds.length) {
+        aiRefreshClaims.push({ scripts: [...scripts], stems: [...stems], ids: affectedIds })
+        if (aiRefreshClaims.length > 32) aiRefreshClaims.splice(0, aiRefreshClaims.length - 32)
+      }
+      // 直接把当前画布上的变体排入渲染队列。useEngineSync 仍负责兜底与
+      // 其它状态变化，但 AI / watcher 的文件变更不能依赖 React effect 的
+      // 时序，否则会出现“脚本已写入、助手已完成、画布仍是旧图”。
+      for (const o of useDocumentStore.getState().doc.objects) {
+        if (o.type !== 'panel' || !affected.includes(o.fileId)) continue
+        void render.render(o.fileId, o.overrides, undefined, 'sync')
+      }
       useRuntimeAssetStore.getState().invalidate([...new Set(affected)])
       // 重建**不等**素材刷新：脚本变了而它产出的 PDF 还没重新生成时，
       // /api/panels 里的 mtime 一动不动，等它等不来。派生元数据的同步照常
@@ -203,10 +248,34 @@ export function handleServerEvent(ev: ServerEvent) {
     case 'ai.done': {
       const ai = useAiStore.getState()
       ai.finish(ev)
-      // 这里**不再 markStale**：文件变了的话后端在 ai.done 之前已经作废 worker、
-      // 跑过统一刷新、发过 `panel.file_changed`（reason=ai），上面那个分支按
-      // stem 把画布上的面板全部转入跟踪——同一次修改只置一次 stale（ADR 0041）。
-      // 老后端（没有 refresh 字段）仍靠 watcher 的 panel.file_changed 兜底。
+      // 新后端的 panel.file_changed 已经把当前画布转入渲染队列；老后端或
+      // 事件竞态下只有 ai.done 时，按 ai.done.script 兜底，避免助手显示完成但
+      // 画布仍是旧图。消费匹配 claim 可保证新旧两条事件不会重复刷新。
+      const claimIndex = aiRefreshClaims.findIndex((claim) => claimMatches(claim, ev.script))
+      const hadPanelRefresh = claimIndex >= 0
+      if (hadPanelRefresh) aiRefreshClaims.splice(claimIndex, 1)
+      if (ev.changed && !hadPanelRefresh) {
+        const affected = useDocumentStore
+          .getState()
+          .doc.objects
+          .filter(
+            (o) =>
+              o.type === 'panel' &&
+              (o.script === ev.script || stemOf(o.fileId) === stemOf(ev.script)),
+          )
+          .map((o) => (o as { fileId: string }).fileId)
+        const ids = [...new Set(affected)]
+        if (ids.length) {
+          render.markStale(ids)
+          for (const o of useDocumentStore.getState().doc.objects) {
+            if (o.type === 'panel' && ids.includes(o.fileId)) {
+              void render.render(o.fileId, o.overrides, undefined, 'sync')
+            }
+          }
+          useRuntimeAssetStore.getState().invalidate(ids)
+          void refreshAssetsAndSync()
+        }
+      }
       const refreshFailed = ev.changed && ev.refresh?.status === 'failed'
       if (refreshFailed) {
         // 代码改成了、项目没刷新：两件事都说，不把前者伪装成全部成功

@@ -10,11 +10,11 @@
 （文档 schema 的迁移是另一回事，`migrateToProject` 那条链照旧。）
 """
 
-PRODUCT_NAME = "Tavotto"
+PRODUCT_NAME = "OmicOS Figure Studio"
 
 PACKAGE_KIND = "tavotto-package"
 PROOF_KIND = "tavotto-proof"
-PACKAGE_EXT = ".tavotto"
+PACKAGE_EXT = ".omicos-figure"
 
 # 分发标识：检查更新与 About 里的链接都从这里取，别处不得再手写仓库地址。
 DIST_NAME = "tavotto"  # PyPI / wheel 包名

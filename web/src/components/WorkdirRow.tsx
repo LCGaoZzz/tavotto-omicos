@@ -1,3 +1,4 @@
+import { FigureError } from '@/components/FigureError'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { t as translate } from '@/i18n'
@@ -47,7 +48,7 @@ export function WorkdirRow() {
           onChange={(v) => void flip(v)}
         />
       </SettingRow>
-      {error && <p className="text-xs text-danger">{error}</p>}
+      {error && <p className="text-xs text-danger"><FigureError error={error} context="environment" /></p>}
     </div>
   )
 }
@@ -77,7 +78,7 @@ export function WorkdirSuggestion() {
       >
         {en('workdirSuggestButton')}
       </Button>
-      {error && <p className="text-xs text-danger">{error}</p>}
+      {error && <p className="text-xs text-danger"><FigureError error={error} context="environment" /></p>}
     </div>
   )
 }

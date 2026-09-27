@@ -40,15 +40,15 @@ export function CanvasTabs() {
 
   return (
     /* px-3 与顶栏同值：品牌标 12 / 页签盒 8 / 页签文字 18 三条竖线收成一条（2026-09-15 打磨 T8）。
-       条高 36 与右栏页签同档（B1）；顶栏那条 border-b 已删，整屏的那一条 hairline 就是这里 */
-    <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border bg-surface px-3">
+       条高 28 与右栏的紧凑工具栏同档；顶栏那条 border-b 已删，整屏的那一条 hairline 就是这里 */
+    <div className="flex h-7 shrink-0 items-center gap-1 border-b border-border bg-surface px-2">
       {/* tablist 只许直接拥有 tab 子项（ARIA 硬性要求，axe critical）：
           role 挂在真正装着 TabItem 的滚动条上；「+」与画布菜单在 tablist 外 */}
       <div
         ref={strip}
         role="tablist"
         aria-label={t('tabs.listLabel')}
-        className="flex h-full min-w-0 shrink items-center gap-4 overflow-x-auto"
+        className="flex h-full min-w-0 shrink items-center gap-3 overflow-x-auto"
       >
         {openTabs.map((id, i) => (
           <TabItem
@@ -195,7 +195,7 @@ function TabItem({
         // 选中态与右栏页签同一副语法（`tabClass`：600 + ink + 2px 线，宪法第五节）：
         // 此前这里只借了那条线，选中仍是 400——同一屏两种「选中」（2026-09-15 打磨 B1）
         tabClass(active),
-        'group flex h-9 max-w-44 shrink-0 cursor-default items-center gap-1',
+        'group flex h-7 max-w-44 shrink-0 cursor-default items-center gap-1',
         // 关闭键仍绝对定位，只在右边留出它那一格：左缘因此是文字本身（T8）
         closable && 'pr-5',
         // 拖动排序的落点提示：不只靠颜色，加背景块让目标一眼可辨

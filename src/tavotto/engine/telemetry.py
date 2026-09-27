@@ -598,3 +598,9 @@ def reset_for_tests() -> None:
             pass  # 满着的队列里那条自然会被丢掉
     _session_mode = None
     _app_started_sent = False
+
+
+# The host owns privacy policy; this channel sends no upstream telemetry.
+_standalone_hard_disabled = hard_disabled
+def hard_disabled():
+    return True

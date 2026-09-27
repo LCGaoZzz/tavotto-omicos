@@ -7,6 +7,7 @@ import { disambiguateRecent } from '@/lib/recentProjects'
 import { cn } from '@/lib/utils'
 import { useProjectStore } from '@/store/projectStore'
 import { useUiStore } from '@/store/uiStore'
+import { notifyOmicosProjectChanged } from '@/lib/omicosHost'
 import { Button } from './ui/Button'
 import { DirBrowser } from './ProjectPicker'
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from './ui/Menu'
@@ -38,7 +39,11 @@ export function ProjectSwitcher() {
   if (!project?.open) return null
 
   const go = (path: string, create = false) => {
-    void open(path, create).catch((e: unknown) =>
+    void open(path, create).then((status) => {
+      // The OmicOS host routes cross-conversation imports to the project the
+      // embedded editor currently owns, including switches made here.
+      notifyOmicosProjectChanged(status)
+    }).catch((e: unknown) =>
       // 存**描述符**而不是翻好的字符串：错误 toast 一直挂到用户手动关掉，
       // 中途切语言时它会重渲染，冻成字符串的那句再也换不回来。
       // 后端没给 code 时 backendErrorMsg 内部会 literal() 原样透出。

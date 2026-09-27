@@ -1,14 +1,10 @@
+import { FigureError } from '@/components/FigureError'
 import { useTranslation } from 'react-i18next'
 import { LoaderCircle, Pause, Play, TriangleAlert, Unplug, X } from '@/components/ui/icons'
 import { ICON_SIZE } from '@/components/ui/Icon'
-import {
-  backendCodeMsg,
-  isNativeTerminal,
-  type NativeSessionInfo,
-  type NativeSessionState,
-} from '@/lib/api'
-import { msg, t as translate, type UiMessage } from '@/i18n'
-import { useFormatMessage } from '@/i18n/react'
+import { isNativeTerminal, type NativeSessionInfo, type NativeSessionState } from '@/lib/api'
+import { msg, t as translate } from '@/i18n'
+
 import { askConfirm } from '@/store/uiStore'
 import { sortSessions, useNativeSessionStore } from '@/store/nativeSessionStore'
 import { InlineWarning } from './settings/SettingRow'
@@ -63,7 +59,6 @@ const TONE: Record<NativeSessionState, 'busy' | 'ready' | 'done' | 'bad'> = {
 
 
 function SessionCard({ session }: { session: NativeSessionInfo }) {
-  const fmt = useFormatMessage()
   const store = useNativeSessionStore()
   const busy = !!store.busy[session.session_id]
   const error = store.errors[session.session_id] ?? null
@@ -103,6 +98,7 @@ function SessionCard({ session }: { session: NativeSessionInfo }) {
             {session.target_display}
           </p>
           <p className="text-xs leading-relaxed text-ink-3">{stateLine(session)}</p>
+          {(session.terminal_error || session.script_error) && <FigureError error={session.terminal_error ?? session.script_error} context="script" />}
         </div>
         {terminal && (
           <Button
@@ -135,7 +131,7 @@ function SessionCard({ session }: { session: NativeSessionInfo }) {
         >
           <TriangleAlert size={ICON_SIZE.xs} className="mt-0.5 shrink-0" />
           <span className="min-w-0 flex-1">
-            {fmt(backendCodeMsg(error.code, error.params, error.message) as UiMessage)}
+            <FigureError error={error} context="script" />
           </span>
         </p>
       )}
@@ -201,14 +197,7 @@ function stateLine(s: NativeSessionInfo): string {
         figures: s.figures_captured,
       })
     case 'failed':
-      return translate(
-        `backend.${s.terminal_error?.code ?? ''}`,
-        // 没有对应文案时退回后端原文；再没有就一句通用的
-        {
-          ns: 'errors',
-          defaultValue: s.terminal_error?.message || ns('state.failed'),
-        },
-      )
+      return ns('state.failed')
     default:
       return ns(`state.${s.state}`)
   }

@@ -85,10 +85,12 @@ function rasterPngFor(sessionId: string, patches: unknown[]): string | null {
 }
 
 function rememberRasterPng(sessionId: string, patches: unknown[], base64: unknown): void {
-  if (typeof base64 !== 'string' || !base64) {
-    rasterPngOf.delete(sessionId)
-    return
-  }
+  // A successful raster render may omit the optional preview bytes when the
+  // bridge has already materialized the image elsewhere.  Do not erase the
+  // last-known image in that case: entering element edit with the same patches
+  // would otherwise turn a visible figure into a blank panel while the hit
+  // layer still works.  A different variant still fails closed in rasterPngFor.
+  if (typeof base64 !== 'string' || !base64) return
   rasterPngOf.set(sessionId, {
     variant: JSON.stringify(patches),
     // data: URL 而不是 blob:——base64 是从 JSON-RPC 里拿的，转成 blob 只是
@@ -189,6 +191,8 @@ export function seedSession(open: OpenFigureResult): { panelId: string; fileId: 
   sessionOf.set(fileIdFor(open.stem), open.session_id)
   // 打开就是 raster 的图（#181 那一类）：第一帧的位图也在这次响应里。
   // 不记下来的话画布要等到用户改第一个值才有东西可显示。
+  // 同一个 session id 重新打开时先丢掉旧图，避免矢量会话继承上一张 raster。
+  rasterPngOf.delete(open.session_id)
   rememberRasterPng(open.session_id, [], open.preview_png_base64)
   return seedEmbeddedSession(
     {

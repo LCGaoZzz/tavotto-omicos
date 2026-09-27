@@ -1,3 +1,4 @@
+import { FigureError } from '@/components/FigureError'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { t as translate } from '@/i18n'
@@ -257,7 +258,7 @@ function OtherPython() {
           {en('apply')}
         </Button>
       </div>
-      {error && <p className="text-xs text-danger">{error}</p>}
+      {error && <p className="text-xs text-danger"><FigureError error={error} context="environment" /></p>}
     </div>
   )
 }

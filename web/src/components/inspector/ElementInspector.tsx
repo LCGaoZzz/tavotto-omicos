@@ -1,62 +1,19 @@
+import { FigureError } from '@/components/FigureError'
 import { Fragment, useCallback, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  AlignCenterHorizontal,
-  AlignCenterVertical,
-  AlignEndHorizontal,
-  AlignEndVertical,
-  AlignHorizontalDistributeCenter,
-  AlignStartHorizontal,
-  AlignStartVertical,
-  AlignVerticalDistributeCenter,
-  ChevronRight,
-  Link2,
-  MoveDown,
-  MoveHorizontal,
-  MoveUp,
-  MoveVertical,
-  RotateCcw,
-} from '@/components/ui/icons'
+import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignHorizontalDistributeCenter, AlignStartHorizontal, AlignStartVertical, AlignVerticalDistributeCenter, ChevronRight, Link2, MoveDown, MoveHorizontal, MoveUp, MoveVertical, RotateCcw } from '@/components/ui/icons'
 import { ICON_SIZE } from '@/components/ui/Icon'
 import type { AlignMode } from '@/lib/geometry'
-import { formatMessage, msg, t as translate, type UiMessage } from '@/i18n'
+import { msg, t as translate, type UiMessage } from '@/i18n'
 import { ENVIRONMENT_CODES } from '@/lib/api'
 import type { EditableField, Manifest, ManifestElement, MarkerShape } from '@/lib/api'
 import { requestRender } from '@/store/renderScheduler'
 import { useQuickEdit } from '@/canvas/quickEditStore'
 import { formatNumberList, parseNumberList } from '@/lib/numberList'
 import { cn } from '@/lib/utils'
-import {
-  centerInFigure,
-  fracToMm,
-  mmToFrac,
-  round4,
-  scaleGroupAbout,
-  type Rect4,
-} from '@/lib/axesLayout'
-import {
-  alignEntries,
-  annotationAlignEntries,
-  GEOMETRY_WRITE_PROPS,
-  geomTarget,
-  groupOf,
-  groupPatches,
-  type Group,
-  isAnnotationEntry,
-  type MixedEntry,
-  positionOf,
-  type AlignEntry,
-} from '@/lib/elementGeom'
-import {
-  applyTickSidePlan,
-  clearOverride,
-  clearOverrides,
-  disableTextEffect,
-  setLegendPlacement,
-  setOverride,
-  setOverrides,
-  unhideElement,
-} from '@/store/actions'
+import { centerInFigure, fracToMm, mmToFrac, round4, scaleGroupAbout, type Rect4 } from '@/lib/axesLayout'
+import { alignEntries, annotationAlignEntries, GEOMETRY_WRITE_PROPS, geomTarget, groupOf, groupPatches, type Group, isAnnotationEntry, type MixedEntry, positionOf, type AlignEntry } from '@/lib/elementGeom'
+import { applyTickSidePlan, clearOverride, clearOverrides, disableTextEffect, setLegendPlacement, setOverride, setOverrides, unhideElement } from '@/store/actions'
 import { readAxesTickModel, type SidePlan } from '@/lib/tickSides'
 import { useDocumentStore } from '@/store/documentStore'
 import { previewStyle } from '@/store/svgPreviewStore'
@@ -67,20 +24,9 @@ import { useUiStore } from '@/store/uiStore'
 import { DependencyRepairCard } from '@/components/DependencyRepairCard'
 import { WorkdirSuggestion } from '@/components/WorkdirRow'
 import { WORKDIR_CODES } from '@/lib/api'
-import {
-  EngineEnvironmentCard,
-  MissingDependencyCard,
-} from '@/components/EngineEnvironmentCard'
+import { EngineEnvironmentCard, MissingDependencyCard } from '@/components/EngineEnvironmentCard'
 import type { PanelObject } from '@/types/document'
-import {
-  engineLabel,
-  groupLabel,
-  groupRank,
-  optionLabel,
-  propLabel,
-  roleName,
-  unsupportedOf,
-} from './roles/registry'
+import { engineLabel, groupLabel, groupRank, optionLabel, propLabel, roleName, unsupportedOf } from './roles/registry'
 import { Button } from '../ui/Button'
 import { GroupHead } from './GroupHead'
 import { GroupToggle } from './GroupToggle'
@@ -92,15 +38,7 @@ import { Select } from '../ui/Select'
 import { Toggle } from '../ui/Toggle'
 import { Tip } from '../ui/Tooltip'
 import { useFieldGesture } from './elementWrite'
-import {
-  absentAppearance,
-  controlKindOf,
-  fieldHintKey,
-  isPercentField,
-  pairedProp,
-  presentFields,
-  primaryGroupHeads,
-} from './presentation/registry'
+import { absentAppearance, controlKindOf, fieldHintKey, isPercentField, pairedProp, presentFields, primaryGroupHeads } from './presentation/registry'
 import type { PresentedField } from './presentation/types'
 import { ArrowStylePicker } from './controls/ArrowPickers'
 import { ColormapPicker } from './controls/ColormapPicker'
@@ -115,27 +53,13 @@ import { LegendBindingControl } from './controls/LegendBindingControl'
 import { LegendPositionPicker } from './controls/LegendPositionPicker'
 import { LineStylePicker } from './controls/LineStylePicker'
 import { MarkerPicker } from './controls/MarkerPicker'
-import {
-  TICK_SPINE_PROPS,
-  TickAndSpineDiagram,
-  type TickSpineAdapter,
-} from './controls/TickAndSpineDiagram'
+import { TICK_SPINE_PROPS, TickAndSpineDiagram, type TickSpineAdapter } from './controls/TickAndSpineDiagram'
 import { TICK_CARD_PROPS, TickTaskCard } from './controls/TickTaskCard'
 import { AspectControl } from './controls/AspectControl'
-import {
-  ErrorBarDiagram,
-  isErrorBarSegment,
-  type ErrorBarSegment,
-} from './controls/ErrorBarDiagram'
+import { ErrorBarDiagram, isErrorBarSegment, type ErrorBarSegment } from './controls/ErrorBarDiagram'
 import { PercentField } from './controls/PercentField'
 import { SPINE_FRAME_PROPS, SpineFrameCard } from './controls/SpineFrameCard'
-import {
-  axisTickState,
-  tickElementOf,
-  tickHostOf,
-  useTickAxisAdapter,
-  type TickAxis,
-} from './tickAdapter'
+import { axisTickState, tickElementOf, tickHostOf, useTickAxisAdapter, type TickAxis } from './tickAdapter'
 import { useElementWriter } from './elementWrite'
 import { TypographyControls } from './controls/TypographyControls'
 import { isTextLikeSelection } from './textStyleModel'
@@ -149,15 +73,7 @@ import { LEGEND_CARD_PROPS, LegendCard } from './LegendCard'
 import { LEGEND_SPACING_PROPS, LegendSpacingCard } from './controls/LegendSpacingCard'
 import { ColorScaleLink } from './ColorScaleLink'
 import { ResetChip } from './controls/textRows'
-import {
-  LEGEND_ANCHOR_PROP,
-  LEGEND_PLACEMENT_PROPS,
-  legendAnchorRange,
-  legendEntryElements,
-  legendPlacementOf,
-  toLegendAnchor,
-  type LegendAnchor,
-} from '@/lib/legendModel'
+import { LEGEND_ANCHOR_PROP, LEGEND_PLACEMENT_PROPS, legendAnchorRange, legendEntryElements, legendPlacementOf, toLegendAnchor, type LegendAnchor } from '@/lib/legendModel'
 import { mergeUnsupported, UnsupportedProps } from './UnsupportedProps'
 
 /** 本文件的文案都在 inspector:element.* 下 */
@@ -599,12 +515,11 @@ function ErrorBlock({
   code?: string
   onRetry?: () => void
 }) {
-  const [open, setOpen] = useState(false)
   return (
     <Section>
       <div className="rounded-sm bg-danger-subtle px-2 py-1.5">
         {/* 描述符在**显示这一刻**才翻，切语言后这条跟着换 */}
-        <p className="text-xs text-danger">{formatMessage(error)}</p>
+        <FigureError error={error} traceback={traceback} context={code === "script_error" || code === "script_failed" ? "script" : "render"} />
         {/* 「脚本跑完没出图」：多半是沙盒 cwd 下相对路径找不到数据，给出口（ADR 0047） */}
         {code && (WORKDIR_CODES as readonly string[]).includes(code) && <WorkdirSuggestion />}
         <div className="mt-0.5 flex items-center gap-2">
@@ -619,22 +534,7 @@ function ErrorBlock({
             </button>
           )}
         </div>
-        {traceback && (
-          <>
-            <button
-              onClick={() => setOpen((v) => !v)}
-              className="mt-1 flex items-center gap-0.5 text-xs text-danger/80 hover:text-danger"
-            >
-              <ChevronRight size={ICON_SIZE.xs} className={cn('transition-transform', open && 'rotate-90')} />
-              {el('traceback')}
-            </button>
-            {open && (
-              <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-sm bg-surface p-1.5 font-mono text-xs leading-relaxed text-ink-2">
-                {traceback}
-              </pre>
-            )}
-          </>
-        )}
+
       </div>
     </Section>
   )

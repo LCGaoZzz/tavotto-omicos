@@ -1,3 +1,4 @@
+import { FigureError } from '@/components/FigureError'
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { requestBlankStart } from '@/store/documentStore'
 import { t } from '@/i18n'
@@ -38,9 +39,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
           <div className="mb-3 text-xs leading-relaxed text-ink-2">
             {t('crash.body', { ns: 'workspace' })}
           </div>
-          <pre className="mb-4 max-h-40 overflow-auto rounded-sm border border-border bg-surface-2 px-2 py-1.5 font-mono text-xs leading-relaxed text-ink-2">
-            {this.state.error.message}
-          </pre>
+          <FigureError error={this.state.error} />
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => location.reload()}>
               {t('actions.reload')}

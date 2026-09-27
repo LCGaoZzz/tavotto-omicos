@@ -236,13 +236,53 @@ def set_project_settings(path: str, patch: dict) -> dict:
         return merged
 
 
-#: 项目内的 Tavotto 收纳目录名（画布 / 导出 / 版本历史都在里面）
-PROJECT_STORE_DIRNAME = "tavottofile"
+#: 项目内的 OmicOS 收纳目录名（画布 / 导出 / 版本历史都在里面）。
+#: 旧版使用的 ``tavottofile`` 只作为一次性迁移来源保留，不能再出现在
+#: 新建项目或导出结果的用户可见路径中。
+PROJECT_STORE_DIRNAME = "omicosfile"
+LEGACY_PROJECT_STORE_DIRNAME = "tavottofile"
 
 
 def project_store_dir(project: str | Path) -> Path:
-    """`<项目>/tavottofile/` —— 与该项目相关的 Tavotto 文件统一收纳处。"""
-    return Path(project) / PROJECT_STORE_DIRNAME
+    """返回项目的 OmicOS 收纳目录，并平滑迁移旧版目录。
+
+    旧项目中的 ``tavottofile`` 包含画布、版本历史和导出结果；首次访问时
+    将整个目录原子地改名为 ``omicosfile``，不改变任何文件内容。若项目目录
+    只读或迁移期间发生竞态，则暂时继续使用旧目录，保证既有项目仍可打开。
+    """
+    root = Path(project)
+    current = root / PROJECT_STORE_DIRNAME
+    legacy = root / LEGACY_PROJECT_STORE_DIRNAME
+    if current.exists():
+        # A previous interrupted migration can leave an empty legacy marker
+        # beside the authoritative store. Remove only that empty directory;
+        # never discard non-empty legacy data.
+        if legacy.is_dir():
+            # Only prune empty legacy directories, including an empty
+            # legacy export directory left by an earlier failed migration.
+            for child in sorted(legacy.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+                if child.is_dir():
+                    try:
+                        child.rmdir()
+                    except OSError:
+                        pass
+            try:
+                legacy.rmdir()
+            except OSError:
+                pass
+        return current
+    if not legacy.exists():
+        return current
+    try:
+        legacy.replace(current)
+    except FileExistsError:
+        # Another process completed the migration between the existence check
+        # and replace(). The new name is now authoritative.
+        return current
+    except OSError:
+        # Read-only/network projects remain usable through the legacy path.
+        return legacy
+    return current
 
 
 def project_export_dir(project: str | Path | None, fallback: Path | None = None) -> Path:

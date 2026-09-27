@@ -34,7 +34,7 @@
       "canvas_scope": "EPS is only available at original size for a single figure. The PDF engine composes the canvas and can’t write PostScript.",
       "no_script": "This figure has no script to re-run. EPS can only come from the script."
     },
-    "exported": "Exported: {{files}}",
+    "exported": "Export complete: {{files}} · Output folder: {{dir}}",
     "filenameError": {
       "control_char": "That file name contains invisible characters. Type it again.",
       "dot_only": "That name has a special meaning. Pick another one.",
@@ -118,7 +118,10 @@
     "title": "Export",
     "transparent": "Transparent background (PNG / TIFF only)",
     "transparentNotForRaster": "This figure is exported as-is, so its own background is kept.",
-    "warningsIntro": "These edits couldn’t be applied to the re-rendered figures, so the output may differ from the canvas:"
+    "warningsIntro": "These edits couldn’t be applied to the re-rendered figures, so the output may differ from the canvas:",
+    "savingCopy": "Saving a copy…",
+    "replacing": "Replacing existing files…",
+    "starting": "Starting export…"
   },
   "layout": {
     "conflict": "A document named “{{name}}” already exists on disk, and this window didn’t write it.",
@@ -155,8 +158,8 @@
     "renderFailed": "Render failed",
     "rendering": "Re-rendering",
     "splashConnecting": "Connecting to Codex…",
-    "splashNoHost": "This canvas opens inside a Codex that supports MCP Apps. In a host without a UI, the same tavotto_* tools still open, edit, preflight and export the figure.",
-    "splashWaiting": "Waiting for the result of tavotto_open_figure…",
+    "splashNoHost": "This canvas opens inside a Codex that supports MCP Apps. In a host without a UI, the same figure tools tools still open, edit, preflight and export the figure.",
+    "splashWaiting": "Waiting for the result of the figure-opening tool…",
     "synced": "In sync"
   },
   "nativeRun": {
@@ -174,7 +177,7 @@
       "target": "Runs"
     },
     "loading": "Reading the run request…",
-    "permissionNotice": "Uses the project’s own Python. The script has the same file permissions as when you run it in your terminal — Tavotto only takes over the Matplotlib figures in that process. Only run code you trust.",
+    "permissionNotice": "Uses the project’s own Python. The script has the same file permissions as when you run it in your terminal — OmicOS only takes over the Matplotlib figures in that process. Only run code you trust.",
     "pythonVersion": "Python {{version}}",
     "remember": "Remember this project and this Python",
     "targetKind": {
@@ -323,7 +326,7 @@
     }
   },
   "playground": {
-    "backHome": "Tavotto homepage",
+    "backHome": "OmicOS homepage",
     "bootDownloadDesktop": "Download desktop {{product}}",
     "bootListSeparator": ", ",
     "bootUnsupportedBrowser": "{{product}} browser playground needs a modern browser with WebAssembly and module Worker support (missing {{missing}}). Desktop {{product}} isn’t affected.",
@@ -336,15 +339,15 @@
     "copied": "Copied",
     "copyCode": "Copy code",
     "coverAlt": "Matplotlib figure preview for “{{name}}”",
-    "desktopNote": "Same Tavotto editor, running in your browser. The desktop app connects it to your own Python environment and your whole figure library.",
-    "downloadDesktop": "Download Tavotto",
+    "desktopNote": "Same OmicOS editor, running in your browser. The desktop app connects it to your own Python environment and your whole figure library.",
+    "downloadDesktop": "Download OmicOS",
     "draggingAnnounce": "Dragging “{{name}}” — drop it on the workbench to run it",
     "editableLabel": "Editable",
     "errDecode": "This file isn’t valid UTF-8.",
     "errMissingFile": "This script reads {{filename}}, but the browser playground accepts a single .py file.",
-    "errMissingFileBody": "Desktop Tavotto opens whole project folders, with local data files and companion modules.",
+    "errMissingFileBody": "Desktop OmicOS opens whole project folders, with local data files and companion modules.",
     "errOom": "The script ran out of browser memory.",
-    "errOomBody": "Desktop Tavotto runs figures in a full local Python process without this limit.",
+    "errOomBody": "Desktop OmicOS runs figures in a full local Python process without this limit.",
     "errRuntime": "Couldn’t load the browser Python runtime.",
     "errScript": "{{filename}} raised an error.",
     "errScriptBody": "The traceback below is the script’s own output.",
@@ -353,12 +356,12 @@
     "errSyntaxBody": "Fix the script and run it again.",
     "errSyntaxLine": "Python syntax error (line {{line}}).",
     "errTimeout": "The script ran longer than the browser playground limit, so its Python worker was stopped.",
-    "errTimeoutBody": "Long-running figures work in desktop Tavotto, which renders in a local Python process.",
+    "errTimeoutBody": "Long-running figures work in desktop OmicOS, which renders in a local Python process.",
     "errUnknown": "The playground hit an unexpected error.",
     "errUnsupportedImport": "{{modules}} is not available in the browser playground.",
-    "errUnsupportedImportBody": "Desktop Tavotto runs the figure in your own Python or Conda environment. For a local module, it opens whole project folders.",
+    "errUnsupportedImportBody": "Desktop OmicOS runs the figure in your own Python or Conda environment. For a local module, it opens whole project folders.",
     "errWorkerCrashed": "The Python worker crashed.",
-    "errWorkerCrashedBody": "Run it again; if this keeps happening, desktop Tavotto renders in a full local Python process.",
+    "errWorkerCrashedBody": "Run it again; if this keeps happening, desktop OmicOS renders in a full local Python process.",
     "errWrongExtension": "The playground accepts a single .py file.",
     "exampleCalibration": "Calibration curve",
     "exampleCalibrationDesc": "Play with marker size, the fitted line and the legend position.",
@@ -388,7 +391,7 @@
     "overrides_other": "{{count}} overrides",
     "panelGone": "The figure is gone. Load the script again.",
     "pendingEdits": "Edits pending",
-    "phaseEngine": "Loading Tavotto engine",
+    "phaseEngine": "Loading OmicOS engine",
     "phaseFigures": "Reading figure objects",
     "phasePackages": "Loading Matplotlib and packages",
     "phaseRuntime": "Loading Python runtime",
@@ -396,13 +399,13 @@
     "pickTitle": "The script produced several figures. Choose one to edit.",
     "pickTruncated": "Showing the first {{count}} figures.",
     "preparing": "Preparing “{{name}}”",
-    "privacyNote": "Your Python source runs locally in a browser worker. Tavotto doesn’t upload it to our servers.",
+    "privacyNote": "Your Python source runs locally in a browser worker. OmicOS doesn’t upload it to our servers.",
     "renderFailed": "Render failed",
     "rendering": "Re-rendering",
     "resetEdits": "Reset edits",
     "showLog": "Script output",
     "showTraceback": "Traceback",
-    "sourceNote": "Edits are Tavotto overrides on the live figure. This file is never modified.",
+    "sourceNote": "Edits are OmicOS overrides on the live figure. This file is never modified.",
     "sourceTitle": "Original source",
     "stageActive": "Release to run “{{name}}”",
     "stageAria": "Workbench: drag an example here, or press Start editing on a card",
@@ -419,7 +422,7 @@
     "taskDoneTitle": "Done.",
     "taskDoneUnverified": "The figure changed. This browser can’t verify the source hash, so no “unchanged” claim here.",
     "taskEditFontsize": "Change the font size from 9 pt to 12 pt.",
-    "taskSelectTitle": "Click “Reaction kinetics” in the figure.",
+    "taskSelectTitle": "Click “Cell-state scores” in the figure.",
     "taskSkip": "Skip the tour",
     "taskStep": "Step {{n}} of 2",
     "taskTitle": "Try changing the title",
@@ -583,7 +586,7 @@
     "addToCanvas": "Add to canvas",
     "allEditable_one": "{{count}} figure ready",
     "allEditable_other": "{{count}} figures ready",
-    "allScriptsHint": "Every .py is here, even ones whose figures aren’t obvious. Run one, and Tavotto links it by what it actually draws.",
+    "allScriptsHint": "Every .py is here, even ones whose figures aren’t obvious. Run one, and OmicOS links it by what it actually draws.",
     "allScriptsTitle": "All scripts",
     "autoLink": "Connect automatically",
     "emptyHint": "Run a plotting script, or drop a PDF or PNG into the figure folder.",
@@ -616,7 +619,7 @@
     "probeFailed": "Test run of {{script}} failed: {{error}}",
     "probeLinked": "Connected {{stems}}",
     "probePickAria": "Choose a script to test run",
-    "probeWarning": "Tavotto will run this script to see which figures it makes.",
+    "probeWarning": "OmicOS will run this script to see which figures it makes.",
     "projectReadOnly": "This project is read-only. You can view status, but connections can’t be saved.",
     "registryInvalid": "The file that records where figures come from can’t be read. New connections won’t take effect until it’s fixed.",
     "relink": "Use this instead",
@@ -668,6 +671,7 @@
     "titlePaste": "The pasted figures are missing assets"
   },
   "settings": {
+    "omicosOnly": "The OmicOS figure assistant uses the current workbench model settings. External coding assistants are not configured here.",
     "about": {
       "check": {
         "bundled_runtime": "Bundled rendering environment",
@@ -692,11 +696,11 @@
       "exportFailed": "Couldn’t build the diagnostics bundle. Try again; if it keeps failing, mention this message in your issue.",
       "exported": "Diagnostic package ready",
       "exporting": "Building…",
-      "licenseAfter": ".",
-      "licenseBefore": "Free software, released under AGPL-3.0-only —",
+      "licenseAfter": " · Internal review",
+      "licenseBefore": "Third-party notices: ",
       "privacy": "Everything stays on this machine, and the assistant runs the Codex / Claude tools installed locally. Only two requests leave it: the update check, which you can turn off under “Updates”, and the anonymous statistics below, off until you opt in.",
       "privacyTitle": "Privacy and data",
-      "source": "get the source",
+      "source": "Notices and build information",
       "tagline": "Figure layout and parameterized chart editing for papers",
       "telemetry": {
         "autoProps": "Every record carries: app version, operating system, CPU architecture, and how it was installed (desktop, pipx, pip, source). Deliberately absent: hostname, user name, Python path, interface language, time zone and screen size.",
@@ -755,30 +759,30 @@
         "doneNewSession": "Installed. Start a new Codex session — an open one can't see the new tools.",
         "error": {
           "bad_action": "That action isn't allowed.",
-          "bad_output": "The command finished without a readable result; it may have been interrupted. Try again, and if it keeps happening, run tavotto codex doctor in a terminal for the raw output.",
-          "canvas_incomplete": "The installed plugin is incomplete: its embedded canvas is missing or damaged, or doesn't match the bundled manifest. The tools still work in Codex, just without a canvas. Reinstall the plugin (codex plugin remove tavotto@tavotto, then codex plugin add tavotto@tavotto), then run the install again. Nothing was changed this time.",
-          "cli_not_found": "Couldn't find the Tavotto command line (tavotto-cli) on this machine. The install may be incomplete — reinstalling the desktop app fixes it.",
+          "bad_output": "The command finished without a readable result; it may have been interrupted. Try again, and if it keeps happening, run omicos-figure codex doctor in a terminal for the raw output.",
+          "canvas_incomplete": "Use the OmicOS-managed figure-tool installation and diagnostics. Existing scripts are unchanged.",
+          "cli_not_found": "Couldn't find the OmicOS command line (omicos-figure) on this machine. The install may be incomplete — reinstalling the desktop app fixes it.",
           "codex_cli_missing": "Couldn't find the codex command. Install the Codex CLI yourself first, then try again.",
           "doctor": {
             "interpreter_unusable": "The plugin's launcher command doesn't start on this machine — Codex would show no tools at all. This run only diagnosed, so nothing changed; running the install swaps it for an interpreter verified to run.",
-            "marketplace_add_failed": "Tavotto isn't registered as a Codex plugin marketplace yet. This run only diagnosed, so nothing changed; running the install sets it up.",
+            "marketplace_add_failed": "OmicOS isn't registered as a Codex plugin marketplace yet. This run only diagnosed, so nothing changed; running the install sets it up.",
             "plugin_add_failed": "The plugin isn't installed yet. This run only diagnosed, so nothing changed; running the install sets it up.",
-            "provision_failed": "The plugin doesn't have a matching version of the Tavotto engine yet. This run only diagnosed, so nothing changed; running the install sets it up."
+            "provision_failed": "The plugin doesn't have a matching version of the OmicOS engine yet. This run only diagnosed, so nothing changed; running the install sets it up."
           },
-          "engine_too_old": "The Tavotto engine on this machine is older than the minimum the installed plugin requires, so the plugin's bridge can't drive it. Upgrade the engine (pipx upgrade tavotto, or update the desktop app), or roll the plugin back to a version that matches.",
-          "health_failed": "Everything is installed, but the health check failed — the plugin still can't find a usable Tavotto engine. Expand the details below for what it reported.",
-          "interpreter_unusable": "The plugin's launcher command doesn't start on this machine — Codex would show no tools at all. On Windows, python3 is often the Microsoft Store placeholder: it looks present but exits immediately. Installing swaps it for an interpreter verified to run; if none is found, install a Python or point TAVOTTO_MCP_PYTHON at one and try again.",
-          "marketplace_add_failed": "Couldn't register Tavotto as a Codex plugin marketplace. Usually there's no network access, or no permission to write Codex's config directory.",
-          "marketplace_state_unknown": "Couldn't determine Codex's marketplace registration (codex plugin marketplace list produced no result), so nothing was changed. That's not the same as not registered. Expand the details for what Codex reported: usually the codex command can't start from inside Tavotto (for example an npm-installed codex that can't find node), or Codex itself isn't set up yet.",
+          "engine_too_old": "Use the OmicOS-managed figure-tool installation and diagnostics. Existing scripts are unchanged.",
+          "health_failed": "Everything is installed, but the health check failed — the plugin still can't find a usable OmicOS engine. Expand the details below for what it reported.",
+          "interpreter_unusable": "The plugin's launcher command doesn't start on this machine — Codex would show no tools at all. On Windows, python3 is often the Microsoft Store placeholder: it looks present but exits immediately. Installing swaps it for an interpreter verified to run; if none is found, install a Python or point OmicOS_MCP_PYTHON at one and try again.",
+          "marketplace_add_failed": "Couldn't register OmicOS as a Codex plugin marketplace. Usually there's no network access, or no permission to write Codex's config directory.",
+          "marketplace_state_unknown": "Use the OmicOS-managed figure-tool installation and diagnostics. Existing scripts are unchanged.",
           "not_desktop": "This action is only available in the desktop app.",
           "other": "The install didn't succeed. The command's own words are in the details below.",
           "pin_failed": "Couldn’t write the new launcher command to both manifests, so it was rolled back. The plugin directory may be read-only or in use — fix that and try again.",
           "plugin_add_failed": "The marketplace was registered, but the plugin wasn’t installed. Expand the details below for what Codex reported.",
-          "plugin_install_ambiguous": "Couldn’t locate a single installed plugin. Codex reported no install path, and the cache has zero or several same-named copies. Expand the details for the candidates; usually codex plugin remove tavotto@tavotto then codex plugin add tavotto@tavotto clears it up.",
-          "plugin_source_unsupported": "The marketplace is registered, but Codex doesn’t list the Tavotto plugin. This Codex version may not understand the plugin source in the marketplace manifest, or the local snapshot may be stale. Run codex plugin marketplace upgrade tavotto in a terminal first; if the plugin still doesn’t appear, update Codex.",
+          "plugin_install_ambiguous": "Use the OmicOS-managed figure-tool installation and diagnostics. Existing scripts are unchanged.",
+          "plugin_source_unsupported": "Use the OmicOS-managed figure-tool installation and diagnostics. Existing scripts are unchanged.",
           "plugin_state_unknown": "Couldn’t determine the plugin’s install state, so nothing was changed. That’s not the same as not installed. Expand the details for what Codex reported.",
-          "provision_failed": "The plugin is installed, but its matching Tavotto engine couldn’t be prepared.",
-          "spawn_failed": "Couldn’t start the Tavotto command line. Try again, or run tavotto codex install in a terminal for the raw output.",
+          "provision_failed": "The plugin is installed, but its matching OmicOS engine couldn’t be prepared.",
+          "spawn_failed": "Couldn’t start the OmicOS command line. Try again, or run omicos-figure codex install in a terminal for the raw output.",
           "uninstall_failed": "The removal didn’t finish. The command’s own words are in the details below."
         },
         "healthy": "Everything checks out. Nothing to do.",
@@ -986,7 +990,7 @@
       },
       "confirm": {
         "uninstallAction": "Uninstall",
-        "uninstallBody": "It will be removed from this project’s Tavotto environment. Scripts that use it cannot render until it is reinstalled.",
+        "uninstallBody": "It will be removed from this project’s OmicOS environment. Scripts that use it cannot render until it is reinstalled.",
         "uninstallBodyDependents": "{{dependents}} depend on {{name}}. They’ll stop working, and scripts that use them can’t render.",
         "uninstallTitle": "Uninstall {{name}}?",
         "rebuildTitle": "Rebuild this project’s environment?",
@@ -1015,7 +1019,7 @@
         "cancel": "Cancel",
         "cancelled": "Cancelled: {{op}} {{name}}. The environment is marked incomplete and will be rebuilt before the next operation.",
         "copyLog": "Copy log",
-        "creating_env": "Creating the Tavotto environment…",
+        "creating_env": "Creating the OmicOS environment…",
         "dismiss": "Dismiss",
         "done": "Finished: {{op}} {{name}} {{version}}",
         "failed": "Could not {{op}} {{name}}",
@@ -1159,7 +1163,7 @@
       "releaseNotes": "Release notes",
       "restartAfter": " to use it. This process is still running the old code.",
       "restartBefore": "Upgrade complete. ",
-      "restartStrong": "Restart Tavotto",
+      "restartStrong": "Restart OmicOS",
       "signatureNote": "Update packages are officially signed, and the signature is checked before installing; if it fails, nothing is installed. Projects, canvases and settings live in your user data folder, so upgrades don’t touch them.",
       "sourceUpgrade": "For a source checkout, run",
       "upgrading": "Upgrading…",
@@ -1289,8 +1293,8 @@
     "sendsOutcome": "Whether preflight and export succeed",
     "sendsPlatform": "Operating system family and processor architecture",
     "sendsTitle": "What is sent",
-    "sendsVersion": "The Tavotto version",
-    "title": "Help improve Tavotto"
+    "sendsVersion": "The OmicOS version",
+    "title": "Help improve OmicOS"
   },
   "updateNotice": {
     "title": "Version {{version}} is available",
@@ -1307,11 +1311,11 @@
     "relaunch": "Restart now",
     "relaunchLater": "Restart later",
     "upgrading": "Upgrading…",
-    "upgraded": "Upgraded to {{version}}. Restart Tavotto to use it.",
+    "upgraded": "Upgraded to {{version}}. Restart OmicOS to use it.",
     "gotIt": "Got it",
     "failed": "Couldn’t update. You’re still on the current version.",
     "retry": "Try again",
-    "sourceBody": "This is a source checkout, so Tavotto doesn’t upgrade itself. Run this in the repository:"
+    "sourceBody": "This is a source checkout, so OmicOS doesn’t upgrade itself. Run this in the repository:"
   },
   "versions": {
     "autoBadge": "Auto",
@@ -1420,7 +1424,7 @@
       "restarted": "Tutorial restarted"
     },
     "failure": {
-      "unavailable": "Tutorial resources are incomplete. Reinstall Tavotto.",
+      "unavailable": "Tutorial resources are incomplete. Reinstall OmicOS.",
       "open_failed": "Couldn’t open the tutorial project. Try again, or open your own project.",
       "locked": "A file in the tutorial project is in use by another program. Close it and try again.",
       "document_failed": "Couldn’t read the tutorial canvas — incompatible version or missing file. Try “Reset tutorial project”.",
@@ -1435,7 +1439,7 @@
     },
     "steps": {
       "welcome": {
-        "title": "Learn Tavotto with a sample",
+        "title": "Learn OmicOS with a sample",
         "body": "An offline tutorial copy: change anything, restart any time, your own projects are never touched. You’ll walk through the two core workflows with real actions."
       },
       "open_fast_edit": {
@@ -1459,7 +1463,7 @@
         "body": "Open “Problems” on the left; it lists what breaks the spec in this figure.",
         "row": {
           "title": "Locate from “Problems”",
-          "body": "Click a problem; Tavotto selects the object and focuses the matching property field."
+          "body": "Click a problem; OmicOS selects the object and focuses the matching property field."
         }
       },
       "export_original": {

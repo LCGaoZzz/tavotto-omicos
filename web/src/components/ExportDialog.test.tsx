@@ -550,6 +550,16 @@ describe('确认只对"这一批"问题有效', () => {
 })
 
 describe('统一 ExportRequest', () => {
+  it('格式行保留多选语义，但选中态用圆形黑点明确显示', async () => {
+    await setup(9)
+    const pdf = formatBox('PDF')!
+    const label = pdf.closest('label')!
+    expect(label.getAttribute('data-format-selected')).toBe('true')
+    expect(pdf.className).toContain('rounded-full')
+    expect(label.querySelector('.peer-checked\\:opacity-100')).toBeTruthy()
+    await click(pdf)
+    expect(label.getAttribute('data-format-selected')).toBe('false')
+  })
   it('画布导出发的是 canvas 段，没有 original 段', async () => {
     await setup(9)
     await click(button('开始导出')!)

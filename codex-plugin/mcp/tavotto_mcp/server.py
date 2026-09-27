@@ -1268,7 +1268,7 @@ class Server:
         return {
             "protocolVersion": version,
             "capabilities": caps,
-            "serverInfo": {"name": SERVER_NAME, "title": "Tavotto", "version": _version()},
+            "serverInfo": {"name": SERVER_NAME, "title": "OmicOS Figure Studio", "version": _version()},
             "instructions": (
                 "Tavotto 负责结构化图表编辑：改的是 override（gid + prop + value），"
                 "**不会动用户的 Python 源码**。流程：tavotto_open_figure 打开 → "

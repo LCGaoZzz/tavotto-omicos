@@ -300,7 +300,9 @@ def _cache_write_lock(cached: Path) -> threading.Lock:
         return lock
 
 
-def _write_render_cache(src: Path, width_px: int, cached: Path) -> None:
+def _write_render_cache(
+    src: Path, width_px: int, cached: Path, source_info: dict | None = None
+) -> None:
     """渲染进临时文件再 `os.replace` 落盘（同键并发不会读到半个 PNG）。
 
     直写最终路径的话，同一张图被两个面板/两个标签页同时请求时，后到的那个
@@ -315,7 +317,25 @@ def _write_render_cache(src: Path, width_px: int, cached: Path) -> None:
     # 不需要另写一套清理；它删的是最旧的，正在写的那个永远是最新的。
     tmp = cached.with_name(f"{cached.stem}.{os.getpid()}-{threading.get_ident():x}.part.png")
     try:
-        pdfbackend.render_preview_png(src, width_px, tmp)
+        render_pdf = None
+        try:
+            if source_info is None:
+                pdfbackend.render_preview_png(src, width_px, tmp)
+            else:
+                worker = _safe_worker(source_info["script"], source_info.get("entry", "__main__"), src.stem)
+                render_pdf = cached.with_name(f"{cached.stem}.{os.getpid()}-{threading.get_ident():x}.source.pdf")
+                worker.export(src.stem, [], str(render_pdf), "pdf", 300)
+                if not render_pdf.is_file() or render_pdf.stat().st_size == 0:
+                    raise RuntimeError("script preview did not produce a PDF")
+                pdfbackend.render_preview_png(render_pdf, width_px, tmp)
+        except Exception:
+            if source_info is None:
+                raise
+            LOG.warning("脚本预览失败，回退原图: %s", src, exc_info=True)
+            pdfbackend.render_preview_png(src, width_px, tmp)
+        finally:
+            if render_pdf is not None:
+                render_pdf.unlink(missing_ok=True)
         _publish_render_cache(tmp, cached)
     finally:
         tmp.unlink(missing_ok=True)  # replace 成功后已经不在了，这里是 no-op
@@ -521,6 +541,40 @@ def safe_resolve(rel_id: str) -> Path:
     return p
 
 
+def _asset_stem(path: Path) -> str:
+    from .engine import importscope
+    return importscope.key(path.resolve().relative_to(require_project().resolve()).as_posix())
+
+
+def _source_info(path: Path) -> dict | None:
+    """Resolve an imported panel even when the persisted registry lags."""
+    key = _asset_stem(path)
+    info = current_registry().for_stem(key)
+    if info is not None:
+        return info
+    try:
+        rel = path.resolve().relative_to(require_project().resolve()).as_posix()
+        aliases, entries = engine_readiness._recovered_source_entries(
+            require_project(), [(rel, path.suffix.lower())], current_registry().entries()
+        )
+        script = aliases.get(key)
+        if not script or not (require_project() / script).is_file():
+            return None
+        cfg = entries.get(script) or {}
+        return {
+            "script": script,
+            "entry": cfg.get("entry", "__main__"),
+            "cost": cfg.get("cost", "medium"),
+            "notes": cfg.get("notes", ""),
+        }
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def _history_stem(rel_id: str, local: str) -> str:
+    return local if engine_runtimeasset.is_runtime_id(rel_id) else _asset_stem(safe_resolve(rel_id))
+
+
 def scan_panels() -> list[dict]:
     """扫描 figures 目录：PDF 是首选（矢量）；无同名 PDF 的图片按位图收录。"""
     ctx = current_ctx()
@@ -562,10 +616,10 @@ def scan_panels() -> list[dict]:
             )
             if spec["px_w"] is not None:
                 entry.update(px_w=spec["px_w"], px_h=spec["px_h"])
-            info = current_registry().for_stem(p.stem)
+            info = _source_info(p)
             if info is not None:  # 可参数化面板：有产出它的 matplotlib 脚本
                 entry.update(script=info["script"], cost=info["cost"])
-                baseline_v = _baseline_version(p.stem, baked)
+                baseline_v = _baseline_version(_asset_stem(p), baked)
                 if baseline_v and baseline_v["patches"]:
                     entry["baked_overrides"] = baseline_v["patches"]
                     # 基线仍烙在文件上吗？文件被外部改写（用户重跑自己的构建
@@ -769,6 +823,14 @@ def _unhandled(exc):
     ), 500
 
 
+@app.get("/help.html")
+def omicos_help():
+    return send_from_directory(WEB_DIST, "help.html")
+
+@app.get("/omicos-build.json")
+def omicos_build():
+    return send_from_directory(WEB_DIST, "omicos-build.json")
+
 @app.get("/")
 def index():
     """工作台（Vite 构建产物）。index.html 必须每次验证，
@@ -848,8 +910,14 @@ def api_render():
     # `path.stat().st_mtime`：mtime 是「什么时候被碰过」，不是「里面是什么」，
     # 拿它当身份两头都错——内容没变而 mtime 变了白丢缓存，换了渲染后端版本
     # （出来的像素可能不一样）却照旧命中。
+    source_info = _source_info(path)
+    script_identity = ""
+    if source_info is not None:
+        script_path = require_project() / source_info["script"]
+        if script_path.is_file():
+            script_identity = f"|script={source_sha1(script_path)}"
     key = hashlib.sha1(
-        f"{rel_id}|{source_sha1(path)}|{w}|"
+        f"{rel_id}|{source_sha1(path)}{script_identity}|{w}|"
         f"{pdfbackend.BACKEND_NAME}-{pdfbackend.BACKEND_VERSION}".encode()
     ).hexdigest()
     cached = CACHE_DIR / f"{key}.png"
@@ -872,7 +940,7 @@ def api_render():
                 # 零字节 = 上一次写到一半就断电/被杀（旧的直写路径留下的产物）。
                 # 把空文件当缓存交出去，用户看到的是一个永远画不出来的面板。
                 cached.unlink(missing_ok=True)
-                _write_render_cache(path, w, cached)
+                _write_render_cache(path, w, cached, source_info)
                 prune_render_cache()
     # no-cache = 每次向服务器验证（304 极快）；内容一变（sha1 进 key）立即失效。
     # 不用长 max-age——「更新原图」后旧 URL 也不能再吃浏览器缓存。
@@ -931,7 +999,19 @@ def _resolve_panel_source(
     if engine_runtimeasset.is_runtime_id(rel_id):
         # runtime 素材没有磁盘原件，**永远**由 worker 现画
         return _serialize_figure(rel_id, overrides, "pdf", dpi, sink, out_dir)
-    path = safe_resolve(o["id"])
+    try:
+        path = safe_resolve(o["id"])
+    except HTTPException as exc:
+        rel_name = Path(str(o.get("id", ""))).name
+        tutorial_file = engine_tutorial.resource_files().get(rel_name)
+        if (
+            exc.code == 404
+            and tutorial_file is not None
+            and tutorial_file.suffix.lower() in PDF_EXT | IMG_EXT
+        ):
+            path = tutorial_file
+        else:
+            raise
     if overrides or rerender:
         rendered = _serialize_figure(rel_id, overrides, "pdf", dpi, sink, out_dir)
         if rendered is not None:
@@ -963,7 +1043,7 @@ def _serialize_figure(
         worker, stem = _engine_worker(rel_id)
     else:
         path = safe_resolve(rel_id)
-        info = current_registry().for_stem(path.stem)
+        info = _source_info(path)
         if info is None:
             return None
         stem = path.stem
@@ -1519,7 +1599,7 @@ def api_package():
         entry = {"id": rel_id}
         if p.is_relative_to(root.resolve()) and p.is_file():
             entry.update(sha1=_sha1_of(p), mtime=int(p.stat().st_mtime), bytes=p.stat().st_size)
-            info = current_registry().for_stem(p.stem)
+            info = _source_info(p)
             if info is not None:
                 entry["script"] = info["script"]
                 scripts[info["script"]] = root / info["script"]
@@ -2662,10 +2742,10 @@ def api_registry():
         return jsonify(
             {"error": f"扫描失败: {exc}", "code": "scan_failed", "params": {"reason": str(exc)}}
         ), 400
-    registered_stems = {s for c in reg.values() for s in c["stems"]}
+    registered_stems = {engine_discover.importscope.key(sc, s) for sc, c in reg.items() for s in c["stems"]}
     candidates = []
     for script, info in sorted(rep["scripts"].items()):
-        fresh = [s for s in info["stems"] if s not in registered_stems]
+        fresh = [s for s in info["stems"] if engine_discover.importscope.key(script, s) not in registered_stems]
         # 已登记且没有新产物就不再列为「未登记」——包括那些静态解不出文件名的
         # 脚本（它们已经靠试运行登记过了，再列一遍只会自相矛盾）。需要重新
         # 探测时从「已登记」那一栏走。
@@ -3365,7 +3445,7 @@ def _engine_worker(rel_id: str):
             info["stem"],
         )
     path = safe_resolve(rel_id)
-    info = current_registry().for_stem(path.stem)
+    info = _source_info(path)
     if info is None:
         abort(404)
     # 磁盘面板永远是 safe：它有自己的原始产物，那是 safe worker 产出的世界。
@@ -3435,7 +3515,7 @@ def api_engine_render():
     # 在这里，而它**既不在 worker 的 timings 里也不在 build 里**。不单独量出来，
     # 用户等的那十几秒在数据里就凭空消失了（第一版计时管道就是这么骗了自己）。
     get_ms = round((time.perf_counter() - t_get) * 1000, 3)
-    info = current_registry().for_stem(Path(stem).stem) or {}
+    info = (engine_runtimeasset.resolve(rel_id, current_registry()) if engine_runtimeasset.is_runtime_id(rel_id) else current_registry().for_stem(_history_stem(rel_id, stem))) or {}
     cold = not worker.built
     # 三个事件都得带 pj：前端 renderStore 按 fileId 索引且不分项目，不带的话
     # 另一个标签页里同名的面板（到处都是的 Fig1.pdf）会跟着显示「正在构建…」
@@ -3524,7 +3604,7 @@ def api_engine_invalidate():
         script = info["script"]
     else:
         path = safe_resolve(rel_id)
-        info = current_registry().for_stem(path.stem)
+        info = _source_info(path)
         if info is None:
             abort(404)
         script = info["script"]
@@ -3637,7 +3717,7 @@ def api_engine_update_source():
                 "code": "annotations_need_pdf",
             }
         ), 400
-    info = current_registry().for_stem(src.stem)
+    info = _source_info(src)
     if info is None:
         return jsonify(
             {"error": "该面板不可参数化（没有对应脚本）", "code": "not_parameterizable"}
@@ -3660,7 +3740,7 @@ def api_engine_update_source():
     # 把这组修改追加为该图的版本历史，末位即当前基线：
     # 新拖入的同名面板自动继承，双击进编辑态能接着改。
     # 带上 commit 后的文件身份——外部重写产物后基线要能被判失效
-    append_baked(src.stem, patches, files=result["file_identity"])
+    append_baked(_asset_stem(src), patches, files=result["file_identity"])
     return jsonify(_write_back_response(result, baked=bool(patches)))
 
 
@@ -4310,8 +4390,8 @@ def api_engine_sync_overrides():
     src_path = safe_resolve(body.get("from_id", ""))
     dst_path = safe_resolve(body.get("to_id", ""))
     patches = body.get("patches", [])
-    info_s = current_registry().for_stem(src_path.stem)
-    info_d = current_registry().for_stem(dst_path.stem)
+    info_s = _source_info(src_path)
+    info_d = _source_info(dst_path)
     if info_s is None or info_d is None or info_s["script"] != info_d["script"]:
         return jsonify(
             {"error": "两张图不属于同一个脚本，无法同步", "code": "sync_different_scripts"}
@@ -4368,7 +4448,7 @@ def api_engine_sync_overrides():
 def api_engine_history():
     """某张图的「更新原图」版本足迹（末位 = 当前基线）。"""
     worker, stem = _engine_worker(request.args.get("id", ""))
-    versions = load_baked().get(stem, {}).get("versions") or []
+    versions = load_baked().get(_history_stem(request.args.get("id", ""), stem), {}).get("versions") or []
     return jsonify(
         {
             "versions": [
@@ -4386,7 +4466,7 @@ def api_engine_history_preview():
     worker, stem = _engine_worker(request.args.get("id", ""))
     n = int(request.args.get("n", -1))
     w = int(request.args.get("w", 400))
-    versions = load_baked().get(stem, {}).get("versions") or []
+    versions = load_baked().get(_history_stem(request.args.get("id", ""), stem), {}).get("versions") or []
     patches = [] if n < 0 or n >= len(versions) else versions[n]["patches"]
     try:
         path = worker.preview_png(stem, patches, w, tag=f"hist{n}")
@@ -4415,7 +4495,7 @@ def api_engine_history_restore():
         ), 400
     worker, stem = _engine_worker(body.get("id", ""))
     n = int(body.get("n", -1))
-    versions = load_baked().get(stem, {}).get("versions") or []
+    versions = load_baked().get(_history_stem(body.get("id", ""), stem), {}).get("versions") or []
     patches = [] if n < 0 or n >= len(versions) else versions[n]["patches"]
     src = safe_resolve(body.get("id", ""))
     try:
@@ -4432,7 +4512,7 @@ def api_engine_history_restore():
         FileLockedError,
     ) as exc:
         return _write_back_error_response(exc)
-    append_baked(stem, patches, files=result["file_identity"])
+    append_baked(_asset_stem(src), patches, files=result["file_identity"])
     return jsonify(_write_back_response(result, patches=patches))
 
 
@@ -5179,7 +5259,7 @@ def api_ai_run():
     if not prompt:
         abort(400)
     path = safe_resolve(body.get("id", ""))
-    info = current_registry().for_stem(path.stem)
+    info = _source_info(path)
     if info is None:
         return jsonify(
             {"error": "该面板不可参数化（没有对应脚本）", "code": "not_parameterizable"}

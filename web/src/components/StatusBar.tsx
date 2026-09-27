@@ -1,3 +1,5 @@
+import { FigureError } from '@/components/FigureError'
+import { figureErrorCopy, figureFailure } from '@/lib/figureError'
 import { useEffect, useRef, type FocusEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, CircleAlert, Info, Lightbulb, X } from '@/components/ui/icons'
@@ -119,6 +121,7 @@ function Toast({
   tone,
   icon,
   text,
+  errorContent,
   action,
   onClose,
   closeLabel,
@@ -129,6 +132,7 @@ function Toast({
   tone: 'info' | 'error' | 'hint'
   icon: ReactNode
   text: string
+  errorContent?: ReactNode
   action?: { label: string; onClick: () => void }
   onClose?: () => void
   closeLabel?: string
@@ -176,7 +180,7 @@ function Toast({
     >
       {icon}
       {/* 同一条 toast 换文字时原位换（旧字退、新字进），不硬切 */}
-      <SwapText className="min-w-0 flex-1" text={text} />
+      {errorContent ?? <SwapText className="min-w-0 flex-1" text={text} />}
       {action && (
         <Button variant="ghost" size="sm" className="shrink-0 text-ink" onClick={action.onClick}>
           {action.label}
@@ -209,7 +213,7 @@ function Toast({
  * 提示区只有 aria-live 没有 role（`role=status` 全产品只留状态区那一个）。
  */
 export function NotificationRail() {
-  const { t } = useTranslation('workspace')
+  const { t, i18n } = useTranslation('workspace')
   const fmt = useFormatMessage()
   const status = useUiStore((s) => s.status)
   const tone = useUiStore((s) => s.statusTone)
@@ -267,7 +271,7 @@ export function NotificationRail() {
         {tone === 'info' ? liveText : ''}
       </div>
       <div aria-live="assertive" role="alert" className="sr-only">
-        {tone === 'error' ? liveText : ''}
+        {tone === 'error' ? figureErrorCopy(figureFailure(status).code, i18n.language).title : ''}
       </div>
       <div aria-live="polite" className="sr-only">
         {hintText}
@@ -309,6 +313,7 @@ export function NotificationRail() {
             )
           }
           text={shownText}
+          errorContent={shown.tone === 'error' ? <FigureError error={shown.status} /> : undefined}
           onClose={shown.tone === 'error' ? () => useUiStore.getState().setStatus(null) : undefined}
           closeLabel={t('status.dismissError')}
         />

@@ -66,7 +66,7 @@ test('标题 / 刻度 / 子图三屏在 360 与 320 两档宽度下都不横向�
   }
 
   const screens: [string, string | null, string, RegExp][] = [
-    ['标题', 'axes_0#text', 'axes_0.title', /Reaction kinetics/],
+    ['标题', 'axes_0#text', 'axes_0.title', /Cell-state response/],
     ['刻度', 'axes_0#axis', 'axes_0.xticks', /刻度|ticks/i],
     ['子图', null, 'axes_0', /子图 1|Axes 1/],
   ]

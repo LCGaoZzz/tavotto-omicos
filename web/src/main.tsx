@@ -5,11 +5,14 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import { IconProvider } from './components/ui/Icon'
 import { bootstrapDesktopSession, setDesktopMenuLocale } from './lib/desktop'
 import { currentLocale, i18n, initI18n, t } from './i18n'
+import { installOmicosHost } from './lib/omicosHost'
 import './index.css'
+import '@/omicos-theme.css'
 
 // i18n 必须在挂载 React **之前**就位：下面那个「桌面会话建立失败」的页面
 // 根本走不到 React，它也得有翻译。
 initI18n()
+installOmicosHost()
 document.documentElement.lang = currentLocale()
 
 // 原生菜单的文案在壳里另有一份（Rust 在 webview 起来之前就要建菜单）。
@@ -34,7 +37,7 @@ void bootstrapDesktopSession().then((r) => {
       'style',
       'display:flex;height:100%;align-items:center;justify-content:center;' +
         'padding:0 24px;text-align:center;' +
-        'font:13px/1.6 -apple-system,sans-serif;color:#3D3D39;background:#F2F2EF',
+        'font:13px/1.6 var(--oc-font-ui);color:var(--oc-txt);background:var(--oc-bg)',
     )
     div.textContent =
       r === 'unauthenticated'

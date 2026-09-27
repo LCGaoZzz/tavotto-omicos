@@ -1,3 +1,4 @@
+import { FigureError } from '@/components/FigureError'
 /**
  * 导出面板（ADR 0031）。
  *
@@ -53,7 +54,6 @@ import {
 } from "@/components/ui/icons";
 import { ICON_SIZE, ICON_STROKE } from "@/components/ui/Icon";
 import { CanvasThumb } from "./CanvasThumb";
-import { Checkbox } from "./ui/Checkbox";
 import { Segmented } from "./ui/Segmented";
 import { Details, Summary } from "@/components/ui/Details";
 import {
@@ -153,6 +153,17 @@ const BlockingIcon = SEVERITY_ICON.error;
 /** 本对话框的文案都在 `dialogs:export.*` 下 */
 const ex = (key: string, values?: Record<string, unknown>) =>
   translate(`export.${key}`, { ns: "dialogs", ...(values ?? {}) });
+
+/** 导出回执必须给出可粘贴到文件管理器的绝对目录。后端正常返回绝对路径；
+ * 对旧后端的相对回执，优先用项目状态中的绝对目录，避免只显示 exports/。 */
+function absoluteExportDirectory(dir?: string | null): string {
+  const candidate = dir?.trim() ?? "";
+  const isAbsolute = (value: string) => value.startsWith("/") || /^[A-Za-z]:[\\/]/.test(value) || value.startsWith("\\\\");
+  if (candidate && isAbsolute(candidate)) return candidate;
+  const configured = useProjectStore.getState().project?.export_dir?.trim() ?? "";
+  if (configured && isAbsolute(configured)) return configured;
+  return candidate || configured || "exports/";
+}
 
 /** 可选的位图分辨率。**没有第二份**——数字进不了组件之外的任何地方 */
 const PPI_VALUES = ["300", "600", "900", "1200"] as const;
@@ -620,6 +631,20 @@ export function ExportDialog() {
       // 判断没有被这个咽喉接管，而「覆盖 / 另存 / 重试」走的正是这里
       // 闸与主按钮读**同一个** `canStart`
       if (!canStart) return;
+      // 导出可能要等待预检、渲染和文件写入；先给出即时反馈，避免用户认为
+      // 「开始导出 / 覆盖 / 另存一份」没有响应。终局状态会在下面的 effect 中
+      // 用实际文件名和完整输出目录覆盖这条提示。
+      useUiStore.getState().setStatus(
+        msg(
+          overwrite === "replace"
+            ? "export.replacing"
+            : overwrite === "rename"
+              ? "export.savingCopy"
+              : "export.starting",
+          undefined,
+          "dialogs",
+        ),
+      );
       const report = reportOn
         ? buildProofPayload(
             doc,
@@ -661,6 +686,20 @@ export function ExportDialog() {
           report: report as Record<string, unknown> | undefined,
         }),
       );
+      if (!job) {
+        const failure = useExportStore.getState().startError;
+        if (failure) {
+          useUiStore.getState().setStatus(
+            msg(
+              "export.operationFailed",
+              { error: failure.message ?? failure.code ?? "unknown error" },
+              "dialogs",
+            ),
+            "error",
+          );
+        }
+        return;
+      }
       /*
        * **每次真的导过之后都要重新确认**：一次点头只对那一次导出有效。
        *
@@ -775,12 +814,13 @@ export function ExportDialog() {
     announced.current = job.job_id;
     const done = job.outputs.filter((o) => o.status === "done" && o.name);
     if (job.status === "done" && done.length) {
+      const dir = absoluteExportDirectory(job.export_dir);
       useUiStore
         .getState()
         .setStatus(
           msg(
             "export.exported",
-            { files: done.map((o) => o.name).join("、") },
+            { files: done.map((o) => o.name).join("、"), dir },
             "dialogs",
           ),
         );
@@ -1101,12 +1141,24 @@ export function ExportDialog() {
                   <label className="flex items-start gap-2 text-xs leading-relaxed text-ink-2">
                     {/* `data-export-confirm`：e2e 与用例的稳定锚点——格式那四颗复选框排在它前面，
                         「页面里第一颗 checkbox」早就不是它了 */}
-                    <Checkbox
-                      data-export-confirm
-                      checked={confirmed}
-                      onChange={(e) => setConfirmed(e.target.checked)}
-                      className="mt-0.5"
-                    />
+                    <span className="relative mt-0.5 inline-flex h-4 w-4 shrink-0">
+                      <input
+                        type="checkbox"
+                        data-export-confirm
+                        checked={confirmed}
+                        onChange={(e) => setConfirmed(e.target.checked)}
+                        className={cn(
+                          "peer absolute inset-0 m-0 h-full w-full appearance-none rounded-full",
+                          "border border-border-control bg-surface outline-none transition-colors duration-fast",
+                          "hover:border-ink-2 checked:border-ink",
+                          "focus-visible:focus-ring disabled:cursor-not-allowed disabled:opacity-40",
+                        )}
+                      />
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 m-auto h-1.5 w-1.5 rounded-full bg-ink opacity-0 transition-opacity duration-fast peer-checked:opacity-100"
+                      />
+                    </span>
                     {/* 三种情况各是一句完整的话，不拼字符串：中文能靠「与」串起来，
                         英文的从句位置不一样，拼出来的句子读着就是机翻 */}
                     <span className="min-w-0 flex-1">
@@ -1191,9 +1243,7 @@ export function ExportDialog() {
           )}
           {startError && (
             <p className="text-xs text-danger">
-              {startError.code === "bad_filename"
-                ? ex(`filenameError.${startError.message}`)
-                : ex("operationFailed", { error: startError.message })}
+              <FigureError error={startError} context="render" />
             </p>
           )}
           {job && !busy && job.status !== "conflict" && (
@@ -1872,13 +1922,7 @@ function ResultBlock({
     return (
       <div className="flex flex-col gap-1.5 rounded-sm border border-danger/40 bg-surface-2 p-2">
         <p className="text-xs text-danger">
-          {translate(`backend.${job.error?.code ?? "export_failed"}`, {
-            ns: "errors",
-            ...(job.error?.params ?? {}),
-            defaultValue: ex("operationFailed", {
-              error: job.error?.code ?? "",
-            }),
-          })}
+          <FigureError error={job.error} context="render" />
         </p>
         {job.error?.recoverable !== false && (
           <Button variant="secondary" size="sm" onClick={onRetry}>
@@ -1890,19 +1934,25 @@ function ResultBlock({
   }
   return (
     <div className="flex flex-col gap-1 rounded-sm border border-border bg-surface-2 p-2">
-      <p className="break-all text-xs text-ink-3">
+      <p
+        className="break-all rounded-sm border border-success/30 bg-success/5 px-1.5 py-1 text-xs text-ink-2"
+        role="status"
+        aria-live="polite"
+      >
+        <Check
+          size={ICON_SIZE.xs}
+          className="mr-1 inline-block align-[-2px] text-success"
+          aria-hidden
+        />
         {ex("savedTo", {
-          dir:
-            job.export_dir ??
-            useProjectStore.getState().project?.export_dir ??
-            "exports/",
+          dir: absoluteExportDirectory(job.export_dir),
         })}
       </p>
       {job.outputs.map((o) => (
         <OutputRow
           key={`${o.format}-${o.name ?? "x"}`}
           out={o}
-          dir={job.export_dir ?? ""}
+          dir={absoluteExportDirectory(job.export_dir)}
         />
       ))}
       {edited && (
@@ -2002,9 +2052,9 @@ function OutputRow({ out, dir }: { out: ExportOutput; dir: string }) {
 }
 
 /**
- * 一种输出格式：普通复选框 + 名字。格式是多选，所以就用复选框的语法，不做成
- * 大卡片。说明（矢量 / 位图 …）进 `title`；禁用的**原因**由调用方写成可见文字，
- * 这里只用 `describedBy` 把它接上——一个灰掉的复选框解释不了自己。
+ * 一种输出格式：可多选，但用圆形点表示选中状态，避免用户把行的浅色底当成
+ * 唯一选中反馈。底层仍是原生 checkbox（PDF + PNG 可以同时选），圆点只是
+ * 这个紧凑格式行的视觉指示器。
  */
 /**
  * 对话框里唯一的一种行（2026-09-15 打磨批次 D）：标签列 80px 在左、控件在右、行高 28。
@@ -2029,17 +2079,34 @@ function FormatCheck({
   return (
     <label
       title={hint}
+      data-format-option={title.toLowerCase()}
+      data-format-selected={checked ? "true" : "false"}
       className={cn(
-        "flex min-h-6 items-center gap-2 text-sm font-medium",
+        "flex min-h-6 items-center gap-2 rounded-sm px-1 text-sm font-medium",
+        checked && "bg-selected",
         disabled ? "cursor-not-allowed text-ink-faint" : "text-ink",
       )}
     >
-      <Checkbox
-        checked={checked}
-        onChange={onChange}
-        disabled={disabled}
-        aria-describedby={describedBy}
-      />
+      <span className="relative inline-flex h-4 w-4 shrink-0">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onChange}
+          disabled={disabled}
+          aria-describedby={describedBy}
+          data-format-checkbox={title.toLowerCase()}
+          className={cn(
+            "peer absolute inset-0 m-0 h-full w-full appearance-none rounded-full",
+            "border border-border-control bg-surface outline-none transition-colors duration-fast",
+            "hover:border-ink-2 checked:border-ink",
+            "focus-visible:focus-ring disabled:cursor-not-allowed disabled:opacity-40",
+          )}
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 m-auto h-1.5 w-1.5 rounded-full bg-ink opacity-0 transition-opacity duration-fast peer-checked:opacity-100"
+        />
+      </span>
       <span>{title}</span>
     </label>
   );

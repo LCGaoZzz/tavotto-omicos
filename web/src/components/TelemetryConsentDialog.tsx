@@ -71,7 +71,7 @@ export function TelemetryConsentDialog() {
         <p className="text-ink-3">
           {tt('later')}{' '}
           <a
-            href="https://github.com/Tavotto/Tavotto/blob/main/docs/privacy.md"
+            href="./help.html#privacy"
             target="_blank"
             rel="noreferrer"
             className="text-accent hover:underline"

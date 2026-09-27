@@ -29,17 +29,16 @@
 
 from __future__ import annotations
 
+from . import importscope
+
 import json
+import os
 from pathlib import Path
 
-REGISTRY_NAME = "tavotto_registry.json"
-#: 改名前（Magic Matplot 时代起一直沿用）的文件名。
-#:
-#: 这是**读取端唯一的兼容点**：注册表不是我们的数据，它躺在用户自己的图库目录
-#: 里，多半还被手工裁决过（一脚本多产物、重复 stem 的归属）。写出一律用新名，
-#: 但新名不在时回退到它——否则用户打开一个老图库看到的是「这个目录不是图库」，
-#: 而真相是文件名换了。**只读不写**：一旦按新名写过一次，新名即唯一权威。
-LEGACY_REGISTRY_NAME = "mm_registry.json"
+REGISTRY_NAME = "omicos_registry.json"
+#: 旧版注册表文件名，只用于读取和一次性迁移。
+LEGACY_REGISTRY_NAMES = ("tavotto_registry.json", "mm_registry.json")
+LEGACY_REGISTRY_NAME = LEGACY_REGISTRY_NAMES[0]
 INLINE_ENTRY = "__main__"
 # 历史上的三方言，仍是 discover 的首选顺序；校验不再限定在这三个之内
 KNOWN_ENTRIES = ("main", "render", INLINE_ENTRY)
@@ -63,7 +62,7 @@ def existing_registry_path(figures_dir: str | Path) -> Path | None:
     正是「界面认得这个图库、命令行说它不是」。
     """
     base = Path(figures_dir)
-    for name in (REGISTRY_NAME, LEGACY_REGISTRY_NAME):
+    for name in (REGISTRY_NAME, *LEGACY_REGISTRY_NAMES):
         p = base / name
         if p.is_file():
             return p
@@ -91,6 +90,15 @@ class Registry:
             raise FileNotFoundError(f"注册表不存在: {path}") from exc
         except ValueError as exc:
             raise RuntimeError(f"注册表不是合法 JSON: {path}: {exc}") from exc
+        if path.name != REGISTRY_NAME:
+            target = registry_path(figures_dir)
+            try:
+                if not target.exists():
+                    os.replace(path, target)
+                    path = target
+            except OSError:
+                # Antivirus/indexers can briefly hold the old file.
+                pass
         self.load_data(data, source=str(path))
         return path
 
@@ -118,7 +126,9 @@ class Registry:
             stems = cfg.get("stems") or []
             if not isinstance(stems, list) or not all(isinstance(s, str) for s in stems):
                 raise RuntimeError(f"{source}: {script} stems 必须是字符串列表")
+            stems = [importscope.local_claim(script, s) for s in stems]
             for stem in stems:
+                stem = importscope.key(script, stem)
                 if stem in index:
                     raise RuntimeError(f"stem 重复注册: {stem} ({index[stem]} vs {script})")
                 index[stem] = script

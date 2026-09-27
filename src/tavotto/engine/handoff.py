@@ -332,7 +332,7 @@ def _script_figures(project: str, script: str) -> list[dict]:
             continue  # 注册表坏条目不该炸掉整次交接
         meta = engine_runtimeasset.load_metadata(project, asset_id)
         desc = (meta or {}).get("descriptor") or None
-        artifact = engine_figcapture.find_original_artifact(project, stem)
+        artifact = engine_figcapture.find_original_artifact(project, stem, script=script)
         if artifact is not None and not engine_runtimeasset.is_pyplot_capture(desc):
             out.append({"stem": stem, "artifact": artifact, "asset_id": None, "cached": False})
         else:

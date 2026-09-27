@@ -228,7 +228,7 @@ class LiveFigureSession:
             source = self.capture_source.get(stem, figcapture.SOURCE_SAVEFIG)
             artifact = None
             if source == figcapture.SOURCE_SAVEFIG and project_root is not None:
-                artifact = figcapture.find_original_artifact(project_root, stem)
+                artifact = figcapture.find_original_artifact(project_root, stem, script=script)
             out.append(
                 figcapture.build_descriptor(
                     script=script,

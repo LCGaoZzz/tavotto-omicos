@@ -1,7 +1,9 @@
+import { FigureError } from '@/components/FigureError'
+import { diagnosticText } from '@/lib/figureError'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { t as translate } from '@/i18n'
-import { backendErrorText, patchProjectSettings } from '@/lib/api'
+import { patchProjectSettings } from '@/lib/api'
 import { isDesktop, pickDirectory } from '@/lib/desktop'
 import { useProjectStore } from '@/store/projectStore'
 import { useUiStore } from '@/store/uiStore'
@@ -76,7 +78,7 @@ export function ProjectSettings() {
           : s,
       )
     } catch (e) {
-      setError(backendErrorText(e))
+      setError(diagnosticText(e))
     }
   }
 
@@ -166,7 +168,7 @@ export function ProjectSettings() {
       {/* 副作用一句话，常驻——它决定「写回原始文件」这条会碰磁盘的能力在不在 */}
       {!allowWriteBack && <InlineWarning>{st('project.writeBackOffHint')}</InlineWarning>}
 
-      {error && <InlineWarning tone="danger">{error}</InlineWarning>}
+      {error && <InlineWarning tone="danger"><FigureError error={error} context="project" /></InlineWarning>}
     </SettingSection>
     </>
   )

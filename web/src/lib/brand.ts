@@ -8,11 +8,12 @@
  * 只认两代前的名字、却不认上一代的，那种半吊子状态比干净断裂更难解释。
  * 文档 schema 的迁移（`migrateToProject`，接受 schema 2/3）是另一回事，照旧。
  */
-export const PRODUCT_NAME = 'Tavotto'
+export const PRODUCT_NAME = 'OmicOS Figure Studio'
+export function productName(): string { return typeof document !== 'undefined' && document.documentElement.lang.startsWith('zh') ? 'OmicOS 图形工作台' : PRODUCT_NAME }
 
 /** 仓库与发行地址（与 `engine/brand.py` 的 REPO_URL 同源） */
-export const REPO_URL = 'https://github.com/Tavotto/Tavotto'
-export const RELEASES_LATEST_URL = `${REPO_URL}/releases/latest`
+export const REPO_URL = './help.html'
+export const RELEASES_LATEST_URL = './help.html#updates'
 /**
  * 「在 Codex 中第一次使用 Tavotto」的使用指南（README 的章节锚点）。
  *
@@ -21,9 +22,9 @@ export const RELEASES_LATEST_URL = `${REPO_URL}/releases/latest`
  * codex 命令行改脚本。设置页的两个小节分别对应这两个方向，别把它们的状态
  * 混在一起说。
  */
-export const CODEX_GUIDE_URL = `${REPO_URL}#using-tavotto-with-codex-for-the-first-time`
+export const CODEX_GUIDE_URL = './help.html#agents'
 
 export const PACKAGE_KIND = 'tavotto-package'
 export const PROOF_KIND = 'tavotto-proof'
 export const CLIPBOARD_FORMAT = 'tavotto/objects@1'
-export const PACKAGE_EXT = '.tavotto'
+export const PACKAGE_EXT = '.omicos-figure'

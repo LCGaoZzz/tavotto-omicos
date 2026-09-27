@@ -25,6 +25,8 @@
 
 from __future__ import annotations
 
+from . import importscope
+
 import argparse
 import ast
 import json
@@ -134,6 +136,7 @@ PRUNE_DIRS = {
     ".tox",
     ".eggs",
     "tavottofile",
+    "omicosfile",
 }  # 项目内的 Tavotto 数据收纳目录，里面没有图表脚本
 MAX_DEPTH = 4  # 图库目录层级：panels/、subfigs/ 这种一两层，给到四层
 MAX_CALL_DEPTH = 6  # 跨函数传播的递归上限（防互递归与深调用链爆栈）
@@ -890,7 +893,9 @@ def analyze_script(path: Path, figures_dir: Path) -> dict | None:
     an.run(entry)
     if not an.sites:
         return None  # 压根不产图（纯数据/工具模块）
-    stems, unresolved = _resolve(an.patterns, figures_dir)
+    scope = importscope.namespace(rel_key(path, figures_dir))
+    scan_root = figures_dir / scope if scope else figures_dir
+    stems, unresolved = _resolve(an.patterns, scan_root)
     return {
         "entry": entry,
         "stems": sorted(stems),
@@ -913,7 +918,7 @@ def claims_of(scripts: dict[str, dict]) -> dict[str, list[str]]:
     out: dict[str, list[str]] = {}
     for script, info in scripts.items():
         for s in info["stems"]:
-            out.setdefault(s, []).append(script)
+            out.setdefault(importscope.key(script, s), []).append(script)
     return out
 
 
@@ -934,7 +939,7 @@ def build_draft(figures_dir: str | Path) -> tuple[dict, dict]:
     rep = discover(figures_dir)
     cfg: dict[str, dict] = {}
     for script, info in sorted(rep["scripts"].items()):
-        stems = [s for s in info["stems"] if s not in rep["conflicts"]]
+        stems = [s for s in info["stems"] if importscope.key(script, s) not in rep["conflicts"]]
         if stems:
             cfg[script] = {"entry": info["entry"], "cost": "medium", "notes": "", "stems": stems}
     return {"version": 1, "scripts": cfg}, rep
@@ -991,14 +996,14 @@ def merge(figures_dir: str | Path) -> tuple[dict, dict, dict]:
     except RuntimeError as exc:  # 结构/类型不对
         raise ValueError(str(exc)) from exc
     scripts = merged.setdefault("scripts", {})
-    registered = {s for c in scripts.values() for s in c.get("stems", [])}
+    registered = {importscope.key(sc, s) for sc, c in scripts.items() for s in c.get("stems", [])}
     added_scripts: list[str] = []
     added_stems: dict[str, list[str]] = {}
     for script, cfg_s in draft["scripts"].items():
-        fresh = [s for s in cfg_s["stems"] if s not in registered]
+        fresh = [s for s in cfg_s["stems"] if importscope.key(script, s) not in registered]
         if not fresh:
             continue
-        registered.update(fresh)
+        registered.update(importscope.key(script, s) for s in fresh)
         if script in scripts:
             scripts[script]["stems"] = list(scripts[script].get("stems", [])) + fresh
             added_stems[script] = fresh
@@ -1038,11 +1043,12 @@ def register(
         cfg = {"version": 1, "scripts": {}}
     scripts = cfg.setdefault("scripts", {})
     prev_entry = scripts.get(script) if isinstance(scripts.get(script), dict) else {}
-    claimed = set(stems)
+    claimed = {importscope.local_claim(script, s) for s in stems}
     if append:
         claimed |= {str(x) for x in (prev_entry or {}).get("stems", [])}
     for name, entry_cfg in list(scripts.items()):
-        if name == script or not isinstance(entry_cfg, dict):
+        if (name == script or not isinstance(entry_cfg, dict)
+                or importscope.namespace(name) != importscope.namespace(script)):
             continue
         kept = [s for s in entry_cfg.get("stems", []) if s not in claimed]
         if len(kept) != len(entry_cfg.get("stems", [])):

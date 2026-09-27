@@ -19,7 +19,7 @@ def main():
     # 轴标签会伸到图幅外——磁盘上的 PDF 靠 bbox_inches="tight" 把它救回来，
     # 但按图幅出图的地方（编辑器、导出）就会把它裁掉。
     fig.subplots_adjust(left=0.19, right=0.95, bottom=0.21, top=0.89)
-    ax.scatter(x, y, s=12, color=PALETTE[0], alpha=0.75, label="Observed")
+    ax.scatter(x, y, s=12, color=PALETTE[0], alpha=0.75, label="Cells")
     coef, cov = np.polyfit(x, y, 1, cov=True)
     fit = np.poly1d(coef)
     xs = np.linspace(x.min(), x.max(), 50)
@@ -28,12 +28,12 @@ def main():
     ax.fill_between(
         xs, fit(xs) - 1.96 * se, fit(xs) + 1.96 * se, color=PALETTE[1], alpha=0.15, lw=0
     )
-    ax.plot(xs, fit(xs), color=PALETTE[1], lw=1.0, label="Linear fit")
+    ax.plot(xs, fit(xs), color=PALETTE[1], lw=1.0, label="Trend")
     r2 = 1 - np.sum((y - fit(x)) ** 2) / np.sum((y - y.mean()) ** 2)
     ax.text(0.97, 0.05, f"n = 60, R² = {r2:.2f}", transform=ax.transAxes, ha="right", fontsize=7)
-    ax.set_xlabel("Normalised load (a.u.)")
-    ax.set_ylabel("Normalised response (a.u.)")
-    ax.set_title("Load–response correlation")
+    ax.set_xlabel("Marker A (a.u.)")
+    ax.set_ylabel("Marker B (a.u.)")
+    ax.set_title("Marker score association")
     ax.legend(loc="upper left")
     save(fig, "Fig2_correlation")
 

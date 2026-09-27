@@ -28,6 +28,8 @@ spawn 路径都是 `execspec.safe_spec()` 的消费者）：cwd 在沙盒、argv
 
 from __future__ import annotations
 
+from . import importscope
+
 import logging
 from pathlib import Path
 
@@ -291,7 +293,7 @@ def _live_stem_conflicts(figures_dir: str | Path, script: str, stems: list[str])
         return {}  # 没有注册表 / 注册表坏了：没有冲突可言
     out: dict[str, str] = {}
     for stem in stems:
-        info = reg.for_stem(stem)
+        info = reg.for_stem(importscope.key(script, stem))
         if info is None or info["script"] == script:
             continue
         if (Path(figures_dir) / info["script"]).is_file():

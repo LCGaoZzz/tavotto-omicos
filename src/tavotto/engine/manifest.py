@@ -284,6 +284,168 @@ _COLL_NAMES = [
 ]
 
 
+def _artist_x_values(artist) -> list[float]:
+    """Return finite x coordinates for the small semantic-profile probe below.
+
+    The probe deliberately stays on public artist getters and does not import
+    OmicVerse.  OmicVerse's violin helper emits ordinary Matplotlib artists, so
+    this keeps the compatibility layer useful for direct Matplotlib figures as
+    well as figures made by a library built on top of it.
+    """
+    try:
+        if isinstance(artist, Line2D):
+            values = artist.get_xdata(orig=False)
+        elif isinstance(artist, Patch):
+            values = [artist.get_x() + artist.get_width() / 2.0]
+        else:
+            return []
+    except Exception:  # noqa: BLE001 — a third-party artist may expose no x getter
+        return []
+    out: list[float] = []
+    for value in values:
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(value):
+            out.append(value)
+    return out
+
+
+def _artist_y_values(artist) -> list[float]:
+    try:
+        if not isinstance(artist, Line2D):
+            return []
+        values = artist.get_ydata(orig=False)
+    except Exception:  # noqa: BLE001 — a third-party artist may expose no y getter
+        return []
+    out: list[float] = []
+    for value in values:
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(value):
+            out.append(value)
+    return out
+
+
+def _ov_violin_labels(ax) -> dict[int, str]:
+    """Give OmicVerse-style violin artists stable, human-readable names.
+
+    ``ov.pl.violin`` intentionally composes the plot from the same public
+    Matplotlib primitives a user would use by hand.  Matplotlib therefore sees
+    labels such as ``_child2`` and ``_child12`` instead of the semantic names a
+    figure editor needs.  This profile is conservative: it activates only for
+    the characteristic combination of one hidden ``FillBetweenPolyCollection``
+    and one hidden ``PathCollection`` per x tick.  Other fill-between and
+    scatter figures keep their existing names and gid contract.
+
+    The returned map is display metadata only.  It never changes an artist,
+    its gid, or its editable capabilities, so direct Matplotlib plots and old
+    documents remain byte-compatible.
+    """
+    try:
+        tick_positions = [float(v) for v in ax.get_xticks()]
+        tick_labels = [str(t.get_text()).strip() for t in ax.get_xticklabels()]
+    except Exception:  # noqa: BLE001 — malformed third-party axes keep old labels
+        return {}
+    groups = [
+        (tick_positions[i] if i < len(tick_positions) else float(i), label)
+        for i, label in enumerate(tick_labels)
+        if label and i < len(tick_positions)
+    ]
+    if len(groups) < 2:
+        return {}
+
+    def hidden(artist) -> bool:
+        try:
+            label = str(artist.get_label())
+        except Exception:  # noqa: BLE001
+            return False
+        return label.startswith("_child")
+
+    bodies = [
+        c
+        for c in getattr(ax, "collections", [])
+        if type(c).__name__ == "FillBetweenPolyCollection"
+        and hidden(c)
+        and len(getattr(c, "get_paths", lambda: ())()) == 1
+    ]
+    points = [
+        c
+        for c in getattr(ax, "collections", [])
+        if isinstance(c, PathCollection) and hidden(c)
+    ]
+    if len(bodies) != len(groups) or len(points) != len(groups):
+        return {}
+
+    out: dict[int, str] = {}
+    for i, (_position, label) in enumerate(groups):
+        out[id(bodies[i])] = f'小提琴体 “{label}”'
+        out[id(points[i])] = f'样本点 “{label}”'
+
+    # The optional box overlay is a pair of ordinary Rectangles.  Keep this
+    # tied to the same strict profile so bar charts are never renamed.
+    rectangles = [
+        p for p in getattr(ax, "patches", []) if type(p).__name__ == "Rectangle"
+    ]
+    if len(rectangles) == len(groups):
+        for patch in rectangles:
+            xs = _artist_x_values(patch)
+            if not xs:
+                continue
+            group_i = min(range(len(groups)), key=lambda i: abs(xs[0] - groups[i][0]))
+            out[id(patch)] = f'箱体 “{groups[group_i][1]}”'
+
+    lines = [line for line in getattr(ax, "lines", []) if isinstance(line, Line2D)]
+    span = abs(groups[-1][0] - groups[0][0])
+    if span > 0:
+        for line in lines:
+            xs = _artist_x_values(line)
+            ys = _artist_y_values(line)
+            if len(xs) < 2 or len(ys) < 2:
+                continue
+            if max(xs) - min(xs) > span * 0.5:
+                out[id(line)] = "显著性括号"
+
+    # A box overlay is normally emitted in the stable order
+    # [box, lower whisker, upper whisker, median] for each group.  Use geometry
+    # to name it when that order is present; otherwise leave the line's normal
+    # generic name in place rather than guessing.
+    by_group: list[list[Line2D]] = [[] for _ in groups]
+    for line in lines:
+        if id(line) in out:
+            continue
+        xs = _artist_x_values(line)
+        if not xs:
+            continue
+        group_i = min(range(len(groups)), key=lambda i: abs(sum(xs) / len(xs) - groups[i][0]))
+        if abs(sum(xs) / len(xs) - groups[group_i][0]) <= 0.3:
+            by_group[group_i].append(line)
+    for group_i, group_lines in enumerate(by_group):
+        if len(group_lines) < 3:
+            continue
+        group_label = groups[group_i][1]
+        median_y = None
+        for line in group_lines:
+            xs, ys = _artist_x_values(line), _artist_y_values(line)
+            if len(xs) >= 2 and len(ys) >= 2 and max(ys) - min(ys) <= 1e-9:
+                median_y = ys[0]
+                out[id(line)] = f'中位线 “{group_label}”'
+                break
+        for line in group_lines:
+            if id(line) in out:
+                continue
+            xs, ys = _artist_x_values(line), _artist_y_values(line)
+            if len(xs) >= 4 and abs(xs[0] - xs[-1]) <= 1e-9:
+                out[id(line)] = f'箱线框 “{group_label}”'
+            elif len(xs) == 2 and abs(xs[0] - xs[1]) <= 1e-9 and median_y is not None:
+                name = "下须" if max(ys) <= median_y else "上须"
+                out[id(line)] = f'{name} “{group_label}”'
+    return out
+
+
 def _coll_label(coll, j: int) -> str:
     names = {c.__name__ for c in type(coll).__mro__}
     for cls_name, nice in _COLL_NAMES:
@@ -497,6 +659,12 @@ def instrument(state: FigState) -> None:
             )
         else:
             label = "色条轴" if ax in cbar_of_ax else twin_labels.get(id(ax)) or f"子图 {i + 1}"
+        # Library-generated plots (notably OmicVerse) use regular Matplotlib
+        # artists but often leave every child with an implementation label such
+        # as ``_child12``.  Compute display-only semantic hints once per axes;
+        # the map is consumed below while the original gid/artist order stays
+        # untouched.
+        semantic_labels = {} if is3d else _ov_violin_labels(ax)
         # **脚本原样的轴方向要在这一刻采**：`ax.invert_yaxis()` 不关自动缩放，
         # 所以 lim 的 originals 里只会是 `_AUTOSCALE` 哨兵，方向那一半信息
         # 端点序里根本没有。晚一步采到的就是某次 override 之后的方向了。
@@ -659,7 +827,7 @@ def instrument(state: FigState) -> None:
                 nice = (
                     f"曲线 “{_snippet(lab)}”"
                     if lab and not lab.startswith("_")
-                    else f"曲线 {j + 1}"
+                    else semantic_labels.get(id(ln)) or f"曲线 {j + 1}"
                 )
                 _register(state, f"axes_{i}.lines_{j}", ln, "line", nice)
             for j, im in enumerate(ax.images):
@@ -688,11 +856,17 @@ def instrument(state: FigState) -> None:
                     nice = (
                         f"散点 “{_snippet(lab)}”"
                         if lab and not lab.startswith("_")
-                        else f"散点系列 {j + 1}"
+                        else semantic_labels.get(id(coll)) or f"散点系列 {j + 1}"
                     )
                     _register(state, gid, coll, "scatter", nice)
                 elif prefix == "fill":
-                    _register(state, gid, coll, "fill", _coll_label(coll, j))
+                    _register(
+                        state,
+                        gid,
+                        coll,
+                        "fill",
+                        semantic_labels.get(id(coll)) or _coll_label(coll, j),
+                    )
                 elif prefix == "linecoll":
                     # 线组：`hlines`/`vlines` 的参考线、`stem` 的竖线、
                     # `eventplot` 的事件线（EventCollection 是它的子类）、
@@ -720,7 +894,13 @@ def instrument(state: FigState) -> None:
                     )
                     _register(state, gid, coll, "linecoll", nice)
                 else:
-                    _register(state, gid, coll, "collection", _coll_label(coll, j))
+                    _register(
+                        state,
+                        gid,
+                        coll,
+                        "collection",
+                        semantic_labels.get(id(coll)) or _coll_label(coll, j),
+                    )
             # 脚本直接 add_patch 的独立箭头（XPS 峰位标注这类画法）与独立形状。
             # 形状按 **Patch family** 认，不逐个列类名：`ax.fill()` 的 Polygon、
             # 手搓的 PathPatch 之外还有 pie 的 Wedge、axhspan/axvspan 的
@@ -748,7 +928,13 @@ def instrument(state: FigState) -> None:
                     _register(state, f"axes_{i}.arrows_{j}", pt, "arrow_patch", f"箭头 {arrow_n}")
                 elif isinstance(pt, Patch) and id(pt) not in skip_ids and not is_cbax:
                     shape_n += 1
-                    _register(state, f"axes_{i}.patches_{j}", pt, "patch", f"形状 {shape_n}")
+                    _register(
+                        state,
+                        f"axes_{i}.patches_{j}",
+                        pt,
+                        "patch",
+                        semantic_labels.get(id(pt)) or f"形状 {shape_n}",
+                    )
         # `ax.add_artist(...)` 放进来的东西（AnchoredText、自定义 Artist…）。
         # matplotlib 会把认得的类型改道进 lines/patches/collections，所以这里
         # 剩下的基本都是「我们不认识的」——**登记但只开 visible/zorder**
@@ -790,12 +976,42 @@ def instrument(state: FigState) -> None:
     state.unregistered = census(fig, state)
 
 
+def _is_standard_legend(leg) -> bool:
+    """Return whether *leg* satisfies the editable Legend contract.
+
+    OmicVerse can attach an ``AnchoredOffsetbox`` to ``axes.legend_`` to draw
+    a composite legend.  It is a valid Matplotlib Artist, but it is not a
+    ``matplotlib.legend.Legend`` and therefore has no ``legend_handles``.
+    Treating every value returned by ``get_legend()`` as a standard Legend
+    makes instrumentation fail before the figure can render.  Keep this
+    capability check structural so supported Matplotlib subclasses continue
+    to receive the full legend model.
+    """
+    try:
+        handles = getattr(leg, "legend_handles", None)
+        iter(handles)
+        return callable(getattr(leg, "get_texts", None)) and callable(
+            getattr(leg, "get_title", None)
+        )
+    except Exception:  # noqa: BLE001 - third-party artist properties may fail
+        return False
+
+
 def _register_legend(state: FigState, gid: str, leg) -> None:
     """登记一个图例：图例本体 + 标题 + 每一项（**原始序号**，与条目模型同源）。
 
     条目模型（`LegendEntries`）在这里建——它记的是**脚本原样**（创建时的
     示意线副本与文字），必须在任何 override 之前采。
     """
+    if not _is_standard_legend(leg):
+        # Composite legend artists (for example OmicVerse's
+        # AnchoredOffsetbox) remain visible and can still expose the generic
+        # visible/z-order controls.  Do not feed them to LegendEntries: they
+        # have no standard handles/text model, and one unsupported artist must
+        # never prevent the rest of the figure from rendering.
+        if id(leg) not in {id(el["artist"]) for el in state.elements}:
+            _register(state, gid, leg, "artist", f"图例装饰 {type(leg).__name__}")
+        return
     _register(state, gid, leg, "legend", "图例", draggable=True)
     model = LegendEntries(leg, state)
     leg._mm_entries = model  # noqa: SLF001

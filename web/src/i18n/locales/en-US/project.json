@@ -70,7 +70,7 @@
     "removeFromListTitle": "Remove from the list — deletes nothing",
     "tagline": "A project is the folder your figures live in. Pick one to start laying out.",
     "tutorial": {
-      "start": "Learn Tavotto with a sample",
+      "start": "Learn OmicOS with a sample",
       "resume": "Resume tutorial",
       "restart": "Take the tutorial again"
     },
@@ -78,7 +78,7 @@
     "tutorialHint": "An offline sample project — change anything, start over anytime. Your own projects stay untouched.",
     "tutorialLabel": "Tutorial",
     "tutorialOpening": "Preparing…",
-    "tutorialUnavailable": "The tutorial resources are incomplete. Reinstall Tavotto."
+    "tutorialUnavailable": "The tutorial resources are incomplete. Reinstall OmicOS."
   },
   "switcher": {
     "allProjects": "All projects…",

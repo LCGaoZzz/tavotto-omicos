@@ -312,13 +312,13 @@ test('图内编辑的属性栏（属性页签，选中标题）：正文框有�
   const textGroup = items.filter({ hasText: /^(文字|Text)\s*\d/ }).first()
   await textGroup.click()
   await page.keyboard.press('ArrowRight')
-  const title = items.filter({ hasText: /Reaction kinetics/ }).first()
+  const title = items.filter({ hasText: /Cell-state response/ }).first()
   await title.click()
 
   const inspector = page.locator('[data-inspector-panel]')
   await inspector.locator('[data-inspector-tab="properties"]').click()
   // 选中态的主语：头部 h2 必须是标题本身，不是「整张图」——否则下面扫的不是这一屏
-  await expect(inspector.locator('h2')).toContainText('Reaction kinetics')
+  await expect(inspector.locator('h2')).toContainText('Cell-state response')
 
   // 关掉聚焦触发的气泡时**不要按 Escape**：这个应用里 Escape 会把选区往上退
   // （标题 → 整张图 → 面板），扫描的主语会悄悄变掉（critique-B 实测）

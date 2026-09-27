@@ -28,6 +28,8 @@
     "openAria": "编辑原图 {{name}}",
     "openFigure": "编辑原图",
     "refresh": "刷新项目",
+    "removeAsset": "删除素材",
+    "removeAssetTip": "从当前图形编辑器素材栏移除",
     "refreshFailed": "无法刷新。{{error}}",
     "refreshTip": "检查项目里的新文件与脚本改动",
     "refreshing": "正在检查新文件…",
@@ -51,7 +53,11 @@
     "sort": "排序",
     "sortAria": "排序方式",
     "sortName": "按名称",
-    "sortRecent": "最近使用",
+    "sortRecent": "加入时间",
+    "clearAll": "清空素材",
+    "clearAllAgain": "再次点击清空",
+    "clearAllTip": "从当前项目的素材栏隐藏全部素材（不会删除文件）",
+    "clearAllAgainTip": "再次点击确认清空全部素材",
     "sortUsed": "使用次数",
     "source": "来源",
     "sourceAll": "全部来源",
@@ -74,8 +80,8 @@
     "staleOtherWindow": "另一窗口保存了更新的版本。改动只保留在这里，未写入磁盘。"
   },
   "boot": {
-    "desktopSessionFailed": "无法建立 Tavotto 桌面会话。请关闭窗口后重新打开应用。",
-    "sessionUnauthenticated": "此页面没有 Tavotto 会话。请从终端或应用重新启动 Tavotto，从它打开的带凭据链接进入。"
+    "desktopSessionFailed": "无法建立 OmicOS 桌面会话。请关闭窗口后重新打开应用。",
+    "sessionUnauthenticated": "此页面没有 OmicOS 会话。请从终端或应用重新启动 OmicOS，从它打开的带凭据链接进入。"
   },
   "canvasList": {
     "canvasName": "画布名",
@@ -133,7 +139,7 @@
   "docBanner": {
     "conflictDisk": "磁盘上：{{canvases}} 张画布 · {{objects}} 个对象 · 改动于 {{time}}",
     "conflictDiskUnknown": "无法读取磁盘上的内容摘要",
-    "conflictExternal": "磁盘上的文档已被 Tavotto 之外的改动覆盖，本窗口的编辑没有写入。",
+    "conflictExternal": "磁盘上的文档已被 OmicOS 之外的改动覆盖，本窗口的编辑没有写入。",
     "conflictStale": "另一窗口保存了更新的版本，本窗口的编辑没有写入。",
     "dismiss": "知道了",
     "keepMain": "保留主版本",
@@ -149,8 +155,8 @@
     "retry": "重试保存",
     "saveAs": "另存为…",
     "saveErrorBody": "改动已暂存，尚未写入磁盘。",
-    "tooNewBody": "Tavotto 没有打开它，磁盘文件没有改动。升级后再试。",
-    "tooNewTitle": "文档来自更新的 Tavotto（schema {{schema}}）"
+    "tooNewBody": "OmicOS 没有打开它，磁盘文件没有改动。升级后再试。",
+    "tooNewTitle": "文档来自更新的 OmicOS（schema {{schema}}）"
   },
   "document": {
     "defaultName": "新文档"
@@ -340,7 +346,7 @@
   },
   "nativeSession": {
     "assetConflict": "这些图属于另一条正在运行的会话，本次运行没有接管：{{stems}}",
-    "cardAria": "Tavotto Run 会话：{{target}}",
+    "cardAria": "OmicOS Run 会话：{{target}}",
     "detach": "放手",
     "resume": "继续运行脚本",
     "resumeHint": "先把图恢复成脚本留下的样子，再继续。你的编辑会在下次停下时重放。",
@@ -371,7 +377,7 @@
     "error": "渲染失败",
     "firstBuild": "首次构建中…",
     "memoryEfficientPreview": "低内存编辑预览",
-    "memoryEfficientPreviewHint": "图形较复杂，Tavotto 已改用低内存编辑预览。导出质量不受影响。",
+    "memoryEfficientPreviewHint": "图形较复杂，OmicOS 已改用低内存编辑预览。导出质量不受影响。",
     "nativeOffline": "会话已结束，重新运行原命令可继续编辑",
     "nativeRunning": "脚本正在运行，停下来才能编辑",
     "rendering": "渲染中…",
@@ -576,7 +582,7 @@
     "pasted_other": "已粘贴 {{count}} 个对象（{{undo}} 可撤销）",
     "projectBackgroundError": "后台检查项目文件时出错。已打开的内容不受影响，修好文件后会自动重试。",
     "recentMissing": "文档的本机副本已不存在",
-    "recentTooNew": "文档来自更新的 Tavotto，本版本无法打开。磁盘上的文件没有改动。",
+    "recentTooNew": "文档来自更新的 OmicOS，本版本无法打开。磁盘上的文件没有改动。",
     "redone": "重做：{{label}}",
     "relinkNone": "未重链接任何图；缺失素材的图保持原样",
     "relinked_other": "已重新链接 {{count}} 个素材（{{undo}} 可撤销）",
@@ -684,7 +690,7 @@
   "hints": {
     "panel_editable": "双击进入图内编辑。",
     "panel_layout_only": "图可排版；连接源脚本后可编辑图内元素。",
-    "fast_edit_entered": "你的改动会保存到当前 Tavotto 文档，原始文件不动。",
+    "fast_edit_entered": "你的改动会保存到当前 OmicOS 文档，原始文件不动。",
     "multi_select": "用选区旁的浮动栏对齐和分布。",
     "problem_found": "左侧「问题」可定位对象和属性字段。"
   }

@@ -1,8 +1,10 @@
+import { FigureError } from '@/components/FigureError'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ArrowDown,
   ArrowUp,
+  Check,
   ChevronRight,
   FileCodeCorner,
   RotateCcwClock,
@@ -58,7 +60,6 @@ import { SearchInput } from '../ui/SearchInput'
 import { Popover } from '../ui/Popover'
 import { Segmented } from '../ui/Segmented'
 import { Select } from '../ui/Select'
-import { StepSlider } from '../ui/StepSlider'
 import { Tip } from '../ui/Tooltip'
 import { DiffView } from './DiffView'
 import { Markdown } from './Markdown'
@@ -84,20 +85,6 @@ const STICK_SLACK = 24
 const COMPOSER_MAX_ROWS = 8
 
 const SCOPE_VALUES: AiScope[] = ['element', 'axes', 'figure']
-
-/**
- * 「执行器 · 模型」合成选择器的值编码（审计 T37）。
- *
- * 呈现上是一个控件，存下去仍是 aiStore 的两个字段。Agent id 是后端注册表里的
- * 短标识（`codex` / `claude`），不含 `/`；模型名整段留给右边，所以按**第一个**
- * `/` 切开，模型名里真出现斜杠也不会被截断。
- */
-const PAIR_SEP = '/'
-const pairValue = (agentId: string, model: string) => `${agentId}${PAIR_SEP}${model}`
-const splitPair = (v: string): [string, string] => {
-  const i = v.indexOf(PAIR_SEP)
-  return i < 0 ? [v, ''] : [v.slice(0, i), v.slice(i + 1)]
-}
 
 const scopeItems = () =>
   SCOPE_VALUES.map((value) => ({ value, label: ai(`scope.${value}`) }))
@@ -405,7 +392,7 @@ export function AssistantPanel() {
               ))}
           </div>
         </Reveal>
-        {error && <p className="mb-1.5 text-xs text-danger">{error}</p>}
+        {error && <p className="mb-1.5 text-xs text-danger"><FigureError error={error} context="script" /></p>}
         {noAgent && (
           // 「没装 CLI」不是错误，用中性语气 + 一个可执行的下一步。
           // 以前这句话只藏在「作用范围与执行器」弹层里，不点开根本看不到
@@ -633,26 +620,34 @@ export function ScopeAgentContent({
   // 绝不凭字符串造一个数组里没有的档位
   const effortList: string[] = cur?.efforts ?? []
   const effortIndex = Math.max(0, effortList.indexOf(effort))
-  // 「执行器 · 模型」的候选。装了两个 Agent 时每一项都带执行器名，只装一个时
-  // 不重复它（触发按钮上已经写着）。**模型清单为空 = 跟随 CLI 默认**，给一条
-  // 只有执行器名的项，绝不伪造一个模型名。
-  const pairs = usable.flatMap((a) =>
-    a.models.length
-      ? a.models.map((m: string) => ({
-          value: pairValue(a.id, m),
-          label: usable.length > 1 ? `${a.display_name} · ${m}` : m,
-        }))
-      : [{ value: pairValue(a.id, ''), label: a.display_name }],
+  // OmicOS 的模型路由是 provider/model。拆成两个控件，与分析栏模型面板
+  // 保持同样的供应商 → 模型选择路径；能力列表已经由 Core 按已配置的 LLM
+  // 过滤，前端不再维护第二份供应商名单。
+  const routeModels = cur?.models ?? []
+  const parsedModels = routeModels.map((route) => {
+    const slash = route.indexOf('/')
+    return slash > 0
+      ? { route, provider: route.slice(0, slash), model: route.slice(slash + 1) }
+      : { route, provider: cur?.display_name ?? active ?? '', model: route }
+  })
+  const providerOptions = useMemo(
+    () => Array.from(new Set(parsedModels.map((item) => item.provider))).filter(Boolean).map((provider) => ({
+      value: provider,
+      label: provider
+        .split(/[-_]/g)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' '),
+    })),
+    [routeModels.join('|')],
   )
-  const currentPair = active ? pairValue(active, model) : ''
-  // 记忆里（或 CLI 默认里）那个模型已经不在清单里时**照实把它显示出来**，
-  // 不静默换成清单里的另一项：控件上写着 A、任务却交给 B 是最难查的一类错。
-  if (currentPair && cur && !pairs.some((p) => p.value === currentPair)) {
-    pairs.unshift({
-      value: currentPair,
-      label: usable.length > 1 ? `${cur.display_name} · ${model}` : model,
-    })
-  }
+  const currentParsed = parsedModels.find((item) => item.route === model) ?? parsedModels[0]
+  const currentProvider = currentParsed?.provider ?? providerOptions[0]?.value ?? ''
+  const modelOptions = parsedModels
+    .filter((item) => item.provider === currentProvider)
+    .map((item) => ({ value: item.route, label: item.model }))
+  const selectedRoute = currentParsed?.route ?? modelOptions[0]?.value ?? ''
+
 
   return (
     <div className="flex flex-col gap-2">
@@ -692,42 +687,36 @@ export function ScopeAgentContent({
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {/* 执行器与模型合成一个紧凑选择器（审计 T37）。**只是呈现合并**：
-              底下仍是 aiStore 的两个字段（agent / models[agent]），选中一项时
-              各写各的，切回另一个 Agent 时它自己的模型记忆还在。
-              只有一项可选时不摆一个选不动的选择器：**但那一项写的是什么仍要
-              看得见**，退成一行静态文字。连模型名都没有（跟随 CLI 默认）时整块
-              不出现——执行器是谁，弹层触发按钮上已经写着了 */}
-          {pairs.length > 1 ? (
-            <div data-ai-agent-model="select" className="flex min-w-0 items-center gap-2">
-              <span className="shrink-0 text-xs text-ink-2">{ai('panel.agentModel')}</span>
-              <Select
-                className="min-w-0 flex-1"
-                ariaLabel={ai('panel.agentModel')}
-                value={currentPair}
-                onChange={(v) => {
-                  const [id, m] = splitPair(v)
-                  useAiStore.getState().setAgent(id)
-                  if (m) useAiStore.getState().setModel(id, m)
-                }}
-                options={pairs}
-              />
-            </div>
-          ) : (
-            cur &&
-            model && (
-              <div data-ai-agent-model="static" className="flex min-w-0 items-center gap-2">
-                <span className="shrink-0 text-xs text-ink-2">{ai('panel.agentModel')}</span>
-                <span className="min-w-0 flex-1 truncate text-xs text-ink" title={model}>
-                  {`${cur.display_name} · ${model}`}
-                </span>
+          {cur && providerOptions.length > 0 && (
+            <>
+              <div data-ai-provider="select" className="flex min-w-0 items-center gap-2">
+                <span className="shrink-0 text-xs text-ink-2">{ai('panel.provider')}</span>
+                <Select
+                  className="min-w-0 flex-1"
+                  ariaLabel={ai('panel.provider')}
+                  value={currentProvider}
+                  onChange={(provider) => {
+                    const first = parsedModels.find((item) => item.provider === provider)
+                    if (first && active) useAiStore.getState().setModel(active, first.route)
+                  }}
+                  options={providerOptions}
+                />
               </div>
-            )
+              <div data-ai-model="select" className="flex min-w-0 items-center gap-2">
+                <span className="shrink-0 text-xs text-ink-2">{ai('panel.model')}</span>
+                <Select
+                  className="min-w-0 flex-1"
+                  ariaLabel={ai('panel.model')}
+                  value={selectedRoute}
+                  onChange={(route) => active && useAiStore.getState().setModel(active, route)}
+                  options={modelOptions}
+                />
+              </div>
+            </>
           )}
-          {/* 推理强度：档位来自 caps 的真实数组，一格一个值。
-              **控件按需展示，当前值不藏**（审计 T37）——收起时那一行就写着
-              「推理强度 · 高」，要动它才展开滑杆。只有一档时滑杆不可调
-              （不是一个假装能拖的滑杆）；一档都没有时整块不出现 */}
+          {/* 推理强度沿用分析栏的离散选择器：档位来自 caps 的真实数组，
+              当前值在收起行里可见，展开后用带勾选状态的选项列表选择。
+              不使用连续滑杆，避免把后端声明的离散档位误读成可插值数值。 */}
           {effortList.length > 0 && (
             <div className="flex min-w-0 flex-col gap-0.5">
               <button
@@ -750,14 +739,37 @@ export function ScopeAgentContent({
                 </span>
               </button>
               {effortOpen && (
-                <StepSlider
-                  value={effortIndex}
-                  count={effortList.length}
-                  disabled={effortList.length === 1}
-                  ariaLabel={ai('panel.effort')}
-                  valueText={effortLabel(effortList[effortIndex])}
-                  onChange={(i) => active && useAiStore.getState().setEffort(active, effortList[i])}
-                />
+                <div
+                  data-ai-effort="options"
+                  role="listbox"
+                  aria-label={ai('panel.effort')}
+                  className="flex flex-col gap-0.5 rounded-md border border-border bg-surface p-1 shadow-pop"
+                >
+                  {effortList.map((level) => {
+                    const selected = level === effortList[effortIndex]
+                    return (
+                      <button
+                        key={level}
+                        type="button"
+                        role="option"
+                        aria-selected={selected}
+                        data-ai-effort-option={level}
+                        className={cn(
+                          'flex h-7 items-center gap-2 rounded-sm px-2 text-left text-xs text-ink outline-none',
+                          'hover:bg-surface-hover focus-visible:focus-ring',
+                          selected && 'bg-selected font-medium',
+                        )}
+                        onClick={() => {
+                          if (active) useAiStore.getState().setEffort(active, level)
+                          setEffortOpen(false)
+                        }}
+                      >
+                        <span className="min-w-0 flex-1 truncate">{effortLabel(level)}</span>
+                        {selected && <Check size={ICON_SIZE.sm} className="shrink-0 text-ink-2" aria-hidden />}
+                      </button>
+                    )
+                  })}
+                </div>
               )}
             </div>
           )}
@@ -907,7 +919,7 @@ export function TaskHistory({ onClose }: { onClose: () => void }) {
       )}
       <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">
         {error ? (
-          <p className="py-2 text-xs text-danger">{error}</p>
+          <p className="py-2 text-xs text-danger"><FigureError error={error} context="script" /></p>
         ) : !loaded ? null : entries.length === 0 ? (
           /* 空状态只给一句（审计 T37）：怎么开始，输入框自己说 */
           <EmptyState icon={RotateCcwClock} title={ai(filtering ? 'history.noMatch' : 'history.empty')} />
@@ -1005,7 +1017,7 @@ function HistoryRow({ entry, onChanged }: { entry: AiHistoryEntry; onChanged: ()
           </Button>
         </Tip>
       </div>
-      {entry.error && <p className="mt-0.5 text-xs text-danger">{entry.error}</p>}
+      {entry.error && <p className="mt-0.5 text-xs text-danger"><FigureError error={entry.error} context="script" /></p>}
       <button
         onClick={() => setDetailsOpen((v) => !v)}
         aria-expanded={detailsOpen}
@@ -1116,7 +1128,18 @@ function SessionBlock({ session }: { session: AiSession }) {
         />
       </p>
 
-      {session.error && <p className="text-xs text-danger">{session.error}</p>}
+      {session.error && <p className="text-xs text-danger"><FigureError error={session.error} context="script" /></p>}
+
+      {session.renderError && (
+        <div className="rounded-sm border border-danger/30 bg-danger/5 px-2 py-1.5 text-xs text-danger">
+          <p className="mb-1 font-medium">{ai('session.renderFailed')}</p>
+          <FigureError error={session.renderError} context="render" />
+        </div>
+      )}
+
+      {session.refresh?.status === 'failed' && !session.renderError && (
+        <p className="text-xs text-danger">{ai('session.refreshFailed')}</p>
+      )}
 
       {session.changed && session.diff && (
         <div className="flex animate-settle-in flex-col gap-1.5">

@@ -41,6 +41,8 @@
 
 from __future__ import annotations
 
+from . import importscope
+
 import copy
 import hashlib
 import json
@@ -366,6 +368,120 @@ def _entry(
     }
 
 
+def _manifest_path_names(payload: object) -> set[str]:
+    """Return the file names recorded by an OmicOS import manifest.
+
+    Import manifests keep absolute Windows paths because they are also used
+    for provenance display. Readiness must continue to work after a project
+    is moved, so only the final file name is compared here; the manifest's
+    presence beside the copied asset is the scope boundary.
+    """
+    names: set[str] = set()
+    if not isinstance(payload, dict):
+        return names
+    values = payload.get("files")
+    if isinstance(values, list):
+        for value in values:
+            if isinstance(value, str):
+                names.add(Path(value.replace("\\", "/")).name.lower())
+    provenance = payload.get("file_provenance")
+    if isinstance(provenance, list):
+        for item in provenance:
+            if not isinstance(item, dict):
+                continue
+            for key in ("source_path", "project_path"):
+                value = item.get(key)
+                if isinstance(value, str):
+                    names.add(Path(value.replace("\\", "/")).name.lower())
+    source = payload.get("source")
+    if isinstance(source, dict):
+        value = source.get("name")
+        if isinstance(value, str):
+            names.add(Path(value.replace("\\", "/")).name.lower())
+    return names
+
+
+def _is_explicit_import(asset: Path, script: Path) -> bool:
+    """Whether an imported asset explicitly carries its sibling source.
+
+    The gallery importer stores a ``.omicos-import.json`` beside the copied
+    image and script. The registry intentionally contains the script's
+    *semantic* output names, while an auto-captured image keeps its timestamp
+    name, so registry stem matching cannot bind these panels. This manifest is
+    the importer-owned provenance contract that makes the sibling pair
+    unambiguous; a bare neighbouring ``.py`` is still not accepted.
+    """
+    metadata = asset.parent / ".omicos-import.json"
+    if not metadata.is_file():
+        return False
+    try:
+        payload = json.loads(metadata.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return False
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        return False
+    names = _manifest_path_names(payload)
+    if asset.name.lower() not in names or script.name.lower() not in names:
+        return False
+    source = payload.get("source")
+    if not isinstance(source, dict):
+        return False
+    declared_name = source.get("name")
+    return isinstance(declared_name, str) and Path(
+        declared_name.replace("\\", "/")
+    ).name.lower() == asset.name.lower()
+
+
+def _recovered_source_entries(root: Path, assets: list[tuple[str, str]], entries: dict[str, dict]):
+    """Bind explicit imported/recovery sidecars when output stems differ.
+
+    Conversation recovery keeps the imported asset name while the recovered
+    script may save a semantic name. Gallery imports have the same shape: the
+    copied script can register the figures it produces under semantic names
+    even though the imported PNG keeps the original auto-capture stem. The
+    metadata sidecar is the explicit provenance contract; a random neighbouring
+    ``.py`` is never enough.
+    """
+    aliases: dict[str, str] = {}
+    effective = dict(entries)
+    for rel, _kind in assets:
+        asset = root / rel
+        script = asset.with_suffix('.py')
+        if not script.is_file():
+            continue
+        metadata = asset.with_suffix('.figmeta.json')
+        payload = None
+        if metadata.is_file():
+            try:
+                payload = json.loads(metadata.read_text(encoding='utf-8'))
+            except (OSError, ValueError, TypeError):
+                continue
+        recovery = payload.get('recovery') if isinstance(payload, dict) else None
+        kernel_history = (
+            isinstance(payload, dict)
+            and isinstance(payload.get('extra'), dict)
+            and payload['extra'].get('source_kind') == 'kernel_history'
+        )
+        if kernel_history:
+            declared = payload.get('code_path') or payload.get('extra', {}).get('source_script')
+            if not isinstance(declared, str) or not declared.lower().endswith('.py'):
+                continue
+        imported = _is_explicit_import(asset, script)
+        if not kernel_history and (
+            not isinstance(recovery, dict) or recovery.get('conversation_source') is not True
+        ) and not imported:
+            continue
+        recorded = str(payload.get('figure') or '').replace('\\', '/').lower() if isinstance(payload, dict) else ''
+        relative = str(rel).replace('\\', '/').lower()
+        if recorded and recorded not in {relative, Path(relative).name}:
+            continue
+        script_rel = script.relative_to(root).as_posix()
+        stem = importscope.key(rel)
+        aliases.setdefault(stem, script_rel)
+        effective.setdefault(script_rel, {'entry': '__main__', 'cost': 'medium', 'stems': [stem]})
+    return aliases, effective
+
+
 # ---------------------------------------------------------------------------
 # 报告
 # ---------------------------------------------------------------------------
@@ -395,11 +511,13 @@ def compute(ctx) -> dict:
         write_failed = state.registry_write_failed
         scan_sig = _script_signature(root)
 
+        recovery_aliases, effective_entries = _recovered_source_entries(root, assets, entries)
         body_sig = _digest(
             {
                 "registry": entries,
                 "assets": assets,
                 "scan": scan_sig,
+                "recovery": recovery_aliases,
                 "writable": writable,
                 "registry_valid": registry_valid,
                 "write_failed": write_failed,
@@ -415,7 +533,9 @@ def compute(ctx) -> dict:
             if report is None
             else sorted(s for s, info in report["scripts"].items() if info["dynamic_names"])
         )
-        owner = {stem: script for script, cfg in entries.items() for stem in cfg["stems"]}
+        owner = {importscope.key(script, stem): script for script, cfg in entries.items() for stem in cfg["stems"]}
+        for stem, script in recovery_aliases.items():
+            owner.setdefault(stem, script)
         blocked = _blocked_reason(registry_valid, writable, write_failed)
 
         # 同一个 stem 的多份素材（Fig1.pdf 与另一个目录下的 Fig1.png）**共享
@@ -423,15 +543,15 @@ def compute(ctx) -> dict:
         by_stem: dict[str, dict] = {}
         panels: list[dict] = []
         for rel, _kind in assets:
-            stem = Path(rel).stem
+            stem = importscope.key(rel)
             cap = by_stem.get(stem)
             if cap is None:
                 cap = by_stem[stem] = _capability(
                     stem,
                     owner=owner,
-                    scripts=entries,
+                    scripts=effective_entries,
                     claims=claims,
-                    dynamic=dynamic,
+                    dynamic=[s for s in dynamic if importscope.namespace(s) == importscope.namespace(rel)],
                     root=root,
                     writable=writable,
                     blocked=blocked,

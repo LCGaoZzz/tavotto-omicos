@@ -286,6 +286,27 @@ describe('raster 档：内嵌画布不能变成空白（ADR 0022）', () => {
     )
   })
 
+  it('bridge 没带可选位图时保留同一变体的首帧，进入编辑不变空白', async () => {
+    const { fileId } = seedSession({ ...openResult(), svg: null, preview: RASTER, preview_png_base64: PNG })
+    const patches: never[] = []
+    restore = installMcpTransport(
+      fakeBridge(() =>
+        okResult({
+          manifest: manifest(11),
+          svg: null,
+          preview: RASTER,
+          render_revision: 2,
+          // Older/fast bridge responses can omit preview_png_base64.
+        }),
+      ),
+    )
+
+    await engineTransport()!.render(fileId, patches)
+    await expect(engineTransport()!.previewPngUrl(fileId, patches, 800)).resolves.toBe(
+      `data:image/png;base64,${PNG}`,
+    )
+  })
+
   it('矢量图照旧不取位图（显示走引擎 SVG）', async () => {
     const { fileId } = seedSession(openResult())
     restore = installMcpTransport(fakeBridge(() => okResult({})))

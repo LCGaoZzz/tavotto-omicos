@@ -30,6 +30,8 @@
     "openAria": "Edit {{name}}",
     "openFigure": "Edit",
     "refresh": "Refresh project",
+    "removeAsset": "Remove material",
+    "removeAssetTip": "Hide this material from the current Figure Studio panel",
     "refreshFailed": "Refresh failed. {{error}}",
     "refreshTip": "Check the project for new files and script changes",
     "refreshing": "Checking for new files…",
@@ -53,7 +55,11 @@
     "sort": "Sort",
     "sortAria": "Sort order",
     "sortName": "By name",
-    "sortRecent": "Recently used",
+    "sortRecent": "Added time",
+    "clearAll": "Clear materials",
+    "clearAllAgain": "Click again to clear",
+    "clearAllTip": "Hide all materials from this project’s material panel (files are kept)",
+    "clearAllAgainTip": "Click again to confirm clearing all materials",
     "sortUsed": "Times used",
     "source": "Source",
     "sourceAll": "All sources",
@@ -77,8 +83,8 @@
     "staleOtherWindow": "Another window saved a newer version. Your changes are kept here, not on disk."
   },
   "boot": {
-    "desktopSessionFailed": "Couldn’t start a Tavotto desktop session. Close this window and reopen the app.",
-    "sessionUnauthenticated": "This page has no Tavotto session. Start Tavotto again from your terminal or app, then open the credentialed link it gives you."
+    "desktopSessionFailed": "Couldn’t start a OmicOS desktop session. Close this window and reopen the app.",
+    "sessionUnauthenticated": "This page has no OmicOS session. Start OmicOS again from your terminal or app, then open the credentialed link it gives you."
   },
   "canvasList": {
     "canvasName": "Canvas name",
@@ -141,7 +147,7 @@
   "docBanner": {
     "conflictDisk": "On disk: {{canvases}} canvases · {{objects}} objects · changed {{time}}",
     "conflictDiskUnknown": "Couldn’t read a summary of the copy on disk",
-    "conflictExternal": "This document was changed on disk outside Tavotto; edits in this window weren’t written.",
+    "conflictExternal": "This document was changed on disk outside OmicOS; edits in this window weren’t written.",
     "conflictStale": "Another window saved a newer version; edits in this window weren’t written.",
     "dismiss": "Got it",
     "keepMain": "Keep main version",
@@ -157,8 +163,8 @@
     "retry": "Retry save",
     "saveAs": "Save as…",
     "saveErrorBody": "Your changes are kept for now, not yet on disk.",
-    "tooNewBody": "Tavotto didn’t open it, so the file on disk is unchanged. Upgrade and try again.",
-    "tooNewTitle": "This document comes from a newer Tavotto (schema {{schema}})"
+    "tooNewBody": "OmicOS didn’t open it, so the file on disk is unchanged. Upgrade and try again.",
+    "tooNewTitle": "This document comes from a newer OmicOS (schema {{schema}})"
   },
   "document": {
     "defaultName": "Untitled"
@@ -357,7 +363,7 @@
   },
   "nativeSession": {
     "assetConflict": "These figures are bound to another running session. This run didn’t take them over: {{stems}}",
-    "cardAria": "Tavotto Run session: {{target}}",
+    "cardAria": "OmicOS Run session: {{target}}",
     "detach": "Let go",
     "resume": "Continue the script",
     "resumeHint": "Restores the figure to what the script left before continuing; your edits replay at the next stop",
@@ -389,7 +395,7 @@
     "error": "Render failed",
     "firstBuild": "First build…",
     "memoryEfficientPreview": "Memory-efficient preview",
-    "memoryEfficientPreviewHint": "This figure is complex, so Tavotto switched to a memory-efficient editing preview. Export quality is unaffected.",
+    "memoryEfficientPreviewHint": "This figure is complex, so OmicOS switched to a memory-efficient editing preview. Export quality is unaffected.",
     "nativeOffline": "Session ended — re-run the original command to keep editing",
     "nativeRunning": "Script is running — editing resumes when it stops",
     "rendering": "Rendering…",
@@ -611,9 +617,9 @@
     "pastedWithSkips_other": "Pasted {{count}} objects, skipped {{skipped}} figures with missing assets. {{undo}} to undo.",
     "pasted_one": "Pasted {{count}} object. {{undo}} to undo.",
     "pasted_other": "Pasted {{count}} objects ({{undo}} to undo)",
-    "projectBackgroundError": "Couldn’t check the project files in the background. What you have open is unaffected; Tavotto retries once the file is fixed.",
+    "projectBackgroundError": "Couldn’t check the project files in the background. What you have open is unaffected; OmicOS retries once the file is fixed.",
     "recentMissing": "The local copy of this document no longer exists",
-    "recentTooNew": "That document is from a newer Tavotto and this build can’t open it. The file on disk is untouched.",
+    "recentTooNew": "That document is from a newer OmicOS and this build can’t open it. The file on disk is untouched.",
     "redone": "Redone: {{label}}",
     "relinkNone": "No figures were relinked; figures with missing assets are unchanged",
     "relinked_one": "Relinked {{count}} asset. {{undo}} to undo.",
@@ -725,14 +731,14 @@
     "zoomValue": "Zoom {{percent}}%"
   },
   "update": {
-    "banner": "Tavotto has been updated. Reload to use the new version.",
+    "banner": "OmicOS has been updated. Reload to use the new version.",
     "later": "Later",
     "title": "Tool updated"
   },
   "hints": {
     "panel_editable": "Double-click to edit inside the figure.",
     "panel_layout_only": "Lay out this figure; connect its source script to edit its elements.",
-    "fast_edit_entered": "Your changes are saved to this Tavotto document. The original file stays untouched.",
+    "fast_edit_entered": "Your changes are saved to this OmicOS document. The original file stays untouched.",
     "multi_select": "Use the floating bar by the selection to align and distribute.",
     "problem_found": "“Problems” on the left locates the object and its property field."
   }

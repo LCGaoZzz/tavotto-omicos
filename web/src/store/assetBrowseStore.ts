@@ -6,14 +6,41 @@
  * 输入就跟着没了：用户刚打了半个文件名、切去看一眼问题面板、回来清单又是
  * 全量的（UI 审计 T06）。
  *
- * **只在内存里，不落 localStorage**：筛选是这一次会话里的临时视角，重启之后
- * 还带着"只看已使用"的话，用户看到的是一份莫名其妙变短的清单，而且没有任何
- * 东西告诉他为什么。换项目 `clear()`——那些筛选说的是上一个项目的目录与素材。
+ * 筛选仍只在内存里；素材隐藏状态则按项目落在 localStorage。这样重启不会把
+ * 用户明确移除的卡片重新塞回来，同时换项目 `clear()` 会重新读取新项目自己的
+ * 隐藏清单，不会串图库。
  */
 import { create } from 'zustand'
+import { currentProjectId } from '@/lib/session'
 
 export type AssetTypeFilter = 'all' | 'pdf' | 'raster' | 'script' | 'runtime'
 export type AssetSortKey = 'name' | 'recent' | 'used'
+
+const HIDDEN_KEY = 'omicos.figure.hiddenAssets'
+const projectKey = () => currentProjectId() ?? '__default__'
+
+function readHidden(): string[] {
+  try {
+    const raw = localStorage.getItem(HIDDEN_KEY)
+    const value = raw ? JSON.parse(raw) : null
+    const ids = value?.[projectKey()]
+    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function writeHidden(hiddenIds: string[]): void {
+  try {
+    const raw = localStorage.getItem(HIDDEN_KEY)
+    const value = raw ? JSON.parse(raw) : {}
+    const next = value && typeof value === 'object' ? { ...value } : {}
+    next[projectKey()] = [...new Set(hiddenIds)]
+    localStorage.setItem(HIDDEN_KEY, JSON.stringify(next))
+  } catch {
+    // 本地存储不可用时，仍保持本次会话内的隐藏状态。
+  }
+}
 
 export interface AssetFilters {
   source: string
@@ -43,10 +70,14 @@ interface AssetBrowseState {
    * （2026-09-15 左栏审计 L06：此前一个能收一个不能，两种骨架）；默认展开，图是主区域。
    */
   figuresOpen: boolean
+  /** 当前项目素材栏中明确隐藏的素材 id；只影响浏览视图，不删除源文件或画布对象。 */
+  hiddenIds: string[]
   setQuery: (query: string) => void
   setFilters: (filters: AssetFilters | ((prev: AssetFilters) => AssetFilters)) => void
   setScriptsOpen: (open: boolean) => void
   setFiguresOpen: (open: boolean) => void
+  hideAsset: (id: string) => void
+  hideAssets: (ids: string[]) => void
   /** 换项目：搜索词与筛选都属于旧项目 */
   clear: () => void
 }
@@ -56,10 +87,24 @@ export const useAssetBrowseStore = create<AssetBrowseState>((set) => ({
   filters: DEFAULT_ASSET_FILTERS,
   scriptsOpen: true,
   figuresOpen: true,
+  hiddenIds: readHidden(),
   setQuery: (query) => set({ query }),
   setFilters: (filters) =>
     set((s) => ({ filters: typeof filters === 'function' ? filters(s.filters) : filters })),
   setScriptsOpen: (scriptsOpen) => set({ scriptsOpen }),
   setFiguresOpen: (figuresOpen) => set({ figuresOpen }),
-  clear: () => set({ query: '', filters: DEFAULT_ASSET_FILTERS }),
+  hideAsset: (id) =>
+    set((state) => {
+      if (state.hiddenIds.includes(id)) return state
+      const hiddenIds = [...state.hiddenIds, id]
+      writeHidden(hiddenIds)
+      return { hiddenIds }
+    }),
+  hideAssets: (ids) =>
+    set((state) => {
+      const hiddenIds = [...new Set([...state.hiddenIds, ...ids])]
+      writeHidden(hiddenIds)
+      return { hiddenIds }
+    }),
+  clear: () => set({ query: '', filters: DEFAULT_ASSET_FILTERS, hiddenIds: readHidden() }),
 }))

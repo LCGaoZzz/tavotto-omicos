@@ -5,7 +5,6 @@ import { pendingCount } from '@/lib/readinessText'
 import { bannerReport, useProjectReadinessStore } from '@/store/projectReadinessStore'
 import { useUiStore } from '@/store/uiStore'
 import { Button } from './ui/Button'
-import { Banner } from './DocumentBanner'
 
 /**
  * 打开一个旧项目时的那一句话。
@@ -37,24 +36,30 @@ export function ProjectReadinessBanner() {
   const pending = pendingCount(report.summary)
 
   return (
-    <Banner icon={<Images size={ICON_SIZE.sm} className="shrink-0 text-ink-3" />}>
-      <span className="min-w-0 flex-1 truncate">
-        {t('workspace:readiness.bannerSummary', { total, editable, pending, layoutOnly })}
-      </span>
-      <Button
-        size="sm"
-        className="shrink-0"
-        onClick={() => useProjectReadinessStore.getState().openCenter({ source: 'banner' })}
-      >
-        {t('workspace:readiness.openCenter')}
-      </Button>
-      <Button
-        size="sm"
-        className="shrink-0 text-ink-3"
-        onClick={() => useProjectReadinessStore.getState().dismissBanner()}
-      >
-        {t('common:actions.close')}
-      </Button>
-    </Banner>
+    <details role="status" className="border-b border-border bg-surface-2 text-xs text-ink">
+      <summary className="flex min-h-7 cursor-pointer list-none items-center gap-2 px-3 outline-none [&::-webkit-details-marker]:hidden">
+        <Images size={ICON_SIZE.sm} className="shrink-0 text-ink-3" aria-hidden />
+        <span className="min-w-0 flex-1 truncate">
+          {t('workspace:readiness.bannerSummary', { total, editable, pending, layoutOnly })}
+        </span>
+        <span className="shrink-0 text-ink-3">⌄</span>
+      </summary>
+      <div className="flex items-center gap-2 border-t border-border px-3 py-1.5">
+        <Button
+          size="sm"
+          className="shrink-0"
+          onClick={() => useProjectReadinessStore.getState().openCenter({ source: 'banner' })}
+        >
+          {t('workspace:readiness.openCenter')}
+        </Button>
+        <Button
+          size="sm"
+          className="shrink-0 text-ink-3"
+          onClick={() => useProjectReadinessStore.getState().dismissBanner()}
+        >
+          {t('common:actions.close')}
+        </Button>
+      </div>
+    </details>
   )
 }

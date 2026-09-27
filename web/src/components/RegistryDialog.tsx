@@ -1,39 +1,13 @@
+import { FigureError } from '@/components/FigureError'
+import { diagnosticText } from '@/lib/figureError'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  CircleCheck,
-  CircleDashed,
-  CircleMinus,
-  Ellipsis,
-  Play,
-  Plus,
-  RefreshCw,
-  TriangleAlert,
-} from '@/components/ui/icons'
+import { CircleCheck, CircleDashed, CircleMinus, Ellipsis, Play, Plus, RefreshCw, TriangleAlert } from '@/components/ui/icons'
 import { Details, Summary } from '@/components/ui/Details'
 import { ICON_SIZE } from '@/components/ui/Icon'
 import { EditableFigureIcon } from '@/components/ui/semanticIcons'
-import {
-  backendCodeMsg,
-  backendErrorText,
-  fetchRegistry,
-  panelSrc,
-  probeScript,
-  scanRegistry,
-  writeRegistryEntry,
-  type CapturedFigureDescriptor,
-  type ReadinessPanel,
-  type ReadinessReport,
-  type ReadinessStatus,
-  type RegistryView,
-  type ScriptInventoryEntry,
-} from '@/lib/api'
-import {
-  PENDING_STATUSES,
-  allEditable,
-  pendingCount,
-  statusLabel,
-} from '@/lib/readinessText'
+import { backendCodeMsg, fetchRegistry, panelSrc, probeScript, scanRegistry, writeRegistryEntry, type CapturedFigureDescriptor, type ReadinessPanel, type ReadinessReport, type ReadinessStatus, type RegistryView, type ScriptInventoryEntry } from '@/lib/api'
+import { PENDING_STATUSES, allEditable, pendingCount, statusLabel } from '@/lib/readinessText'
 import { cn } from '@/lib/utils'
 import { formatMessage, msg, t as translate } from '@/i18n'
 import { listJoin } from '@/i18n/format'
@@ -156,7 +130,7 @@ function ReadinessBody() {
       // `force`：用户刚写过盘，绝不能复用一个**写之前**就发出的在途请求
       await refreshAssetsAndSync({ force: true })
     } catch (e) {
-      setError(backendErrorText(e))
+      setError(diagnosticText(e))
     } finally {
       setBusy(null)
     }
@@ -261,7 +235,7 @@ function ReadinessBody() {
 
       {error && (
         <p role="alert" className="text-xs leading-relaxed text-danger">
-          {error}
+          <FigureError error={error} context="project" />
         </p>
       )}
 

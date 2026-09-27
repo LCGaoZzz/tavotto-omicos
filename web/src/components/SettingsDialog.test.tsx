@@ -89,8 +89,6 @@ describe('分区与深链', () => {
       'ai',
       'packages',
       'diagnostics',
-      'update',
-      'about',
     ])
     expect(current()?.dataset.section).toBe('general')
     for (const id of SECTIONS) expect(navButtons().map((b) => b.textContent)).toContain(st(`section.${id}`))
@@ -124,7 +122,7 @@ describe('尺寸与滚动合同', () => {
     await open()
     const before = { w: dialog().style.width, h: dialog().style.height }
     expect(before).toEqual({ w: `${SHELL_WIDTH}px`, h: SHELL_HEIGHT })
-    for (const id of ['packages', 'diagnostics', 'update', 'about', 'spec']) {
+    for (const id of ['packages', 'diagnostics', 'spec']) {
       await act(async () => navButtons().find((b) => b.dataset.section === id)!.click())
       expect({ w: dialog().style.width, h: dialog().style.height }).toEqual(before)
     }
@@ -158,11 +156,11 @@ describe('键盘', () => {
     expect(current()?.dataset.section).toBe('interface')
     expect(document.activeElement).toBe(current())
     await key('End')
-    expect(current()?.dataset.section).toBe('about')
+    expect(current()?.dataset.section).toBe('diagnostics')
     await key('ArrowDown')
     expect(current()?.dataset.section).toBe('general') // 循环
     await key('ArrowUp')
-    expect(current()?.dataset.section).toBe('about')
+    expect(current()?.dataset.section).toBe('diagnostics')
     await key('Home')
     expect(current()?.dataset.section).toBe('general')
   })

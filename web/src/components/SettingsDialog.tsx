@@ -4,16 +4,13 @@ import { t as translate } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { dialogCovered, useUiStore } from '@/store/uiStore'
 import { Dialog } from './ui/Dialog'
-import { CodingAgentsSection } from './settings/CodingAgentsSection'
 import { DiagnosticsSettings } from './settings/DiagnosticsSettings'
 import { ExportSettings } from './settings/ExportSettings'
 import { GeneralSettings } from './settings/GeneralSettings'
 import { InterfaceSettings } from './settings/InterfaceSettings'
 import { PackagesSettings } from './settings/PackagesSettings'
-import { PrivacyAboutSettings } from './settings/PrivacyAboutSettings'
 import { ProfilesSettings } from './settings/ProfilesSettings'
 import { ProjectSettings } from './settings/ProjectSettings'
-import { UpdateSettings } from './settings/UpdateSettings'
 
 /**
  * 设置对话框的**外壳**：导航 + 分区分派，仅此而已（ADR 0038）。
@@ -48,8 +45,6 @@ export type SectionId =
   | 'ai'
   | 'packages'
   | 'diagnostics'
-  | 'update'
-  | 'about'
 
 export const SECTIONS: SectionId[] = [
   'general',
@@ -61,8 +56,6 @@ export const SECTIONS: SectionId[] = [
   'ai',
   'packages',
   'diagnostics',
-  'update',
-  'about',
 ]
 
 /**
@@ -70,6 +63,8 @@ export const SECTIONS: SectionId[] = [
  * 肌肉记忆都可能还带着旧名字；不认识的一律回到「常规」而不是白屏。
  */
 const ALIASES: Record<string, SectionId> = {
+  update: 'diagnostics',
+  about: 'diagnostics',
   profiles: 'spec',
   canvas: 'interface',
   sidebars: 'interface',
@@ -101,7 +96,7 @@ export const NAV_GROUPS: { id: 'general' | 'workflow' | 'integrations' | 'system
   { id: 'general', sections: ['general', 'interface', 'project'] },
   { id: 'workflow', sections: ['style', 'spec', 'export'] },
   { id: 'integrations', sections: ['ai', 'packages'] },
-  { id: 'system', sections: ['diagnostics', 'update', 'about'] },
+  { id: 'system', sections: ['diagnostics'] },
 ]
 
 /**
@@ -119,8 +114,6 @@ export const CONTENT_MODE: Record<SectionId, 'normal' | 'wide'> = {
   ai: 'normal',
   packages: 'wide',
   diagnostics: 'normal',
-  update: 'normal',
-  about: 'normal',
 }
 
 /** 本对话框的文案在 dialogs:settings.* 下 */
@@ -244,11 +237,13 @@ export function SettingsDialog() {
             {section === 'style' && <ProfilesSettings kind="style" />}
             {section === 'spec' && <ProfilesSettings kind="spec" />}
             {section === 'export' && <ExportSettings />}
-            {section === 'ai' && <CodingAgentsSection />}
+            {section === 'ai' && (
+              <div className="type-meta rounded-md bg-surface-2 px-3 py-2">
+                {st('omicosOnly')}
+              </div>
+            )}
             {section === 'packages' && <PackagesSettings />}
             {section === 'diagnostics' && <DiagnosticsSettings />}
-            {section === 'update' && <UpdateSettings />}
-            {section === 'about' && <PrivacyAboutSettings />}
           </div>
         </div>
       </div>

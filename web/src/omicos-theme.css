@@ -1,0 +1,367 @@
+/* OmicOS UI baseline b7dba17, src/assets/base.css. Live host tokens take precedence.
+ * UI tokens only: figure objects, source fonts and publication colours are not changed. */
+:root {
+  --oc-bg: #f8fbf9; --oc-surface: #eef4f1; --oc-raised: #e3ece7; --oc-overlay: #d8e4de;
+  --oc-border: #d6e0db; --oc-border-hi: #c9d5cf;
+  --oc-txt: #1b231f; --oc-txt-2: rgba(27,35,31,.62); --oc-txt-3: rgba(27,35,31,.38);
+  --oc-teal: #4c7a69; --oc-teal-hi: #5d8677; --oc-teal-dim: rgba(76,122,105,.10);
+  --oc-guanine: #d32f2f; --oc-thymine: #a65c08; --oc-adenine: #388e3c;
+  --oc-input-bg: #fff; --oc-input-border: #c9d5cf; --oc-scroll-thumb: #c9d5cf;
+  --oc-font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Helvetica, Arial, sans-serif;
+  --oc-font-mono: 'Fira Code', 'JetBrains Mono', 'Cascadia Code', monospace;
+  --radius-card: 10px; --radius-input: 8px; --radius-btn: 8px;
+}
+:root[data-theme='dark'] {
+  --oc-bg: #000; --oc-surface: #050607; --oc-raised: #090b0c; --oc-overlay: #111416;
+  --oc-border: rgba(255,255,255,.105); --oc-border-hi: rgba(255,255,255,.18);
+  --oc-txt: #f5f0e6; --oc-txt-2: rgba(245,240,230,.68); --oc-txt-3: rgba(245,240,230,.38);
+  --oc-teal: #78aa95; --oc-teal-hi: #84c3a0; --oc-teal-dim: rgba(120,170,149,.12);
+  --oc-guanine: #ef9a9a; --oc-thymine: #ffb74d; --oc-adenine: #81c784;
+  --oc-input-bg: rgba(255,255,255,.035); --oc-input-border: rgba(255,255,255,.12);
+  --oc-scroll-thumb: rgba(255,255,255,.18);
+  color-scheme: dark;
+}
+:root {
+  --color-bg: var(--oc-bg); --color-canvas: var(--oc-raised); --color-surface: var(--oc-surface);
+  --color-surface-2: var(--oc-raised); --color-ink: var(--oc-txt); --color-ink-2: var(--oc-txt-2);
+  /* Essential small labels need more contrast than the host's decorative tertiary tint. */
+  --color-ink-3: var(--oc-txt-2); --color-ink-faint: var(--oc-txt-3);
+  --color-border: var(--oc-border); --color-border-strong: var(--oc-border-hi);
+  --color-border-control: var(--oc-txt-2); --color-field: var(--oc-input-bg);
+  --color-field-hover: var(--oc-raised); --color-accent: var(--oc-teal);
+  --color-accent-subtle: var(--oc-teal-dim); --color-selected: var(--oc-teal-dim);
+  --color-sel: var(--oc-teal-hi); --color-danger: var(--oc-guanine);
+  --color-danger-subtle: color-mix(in srgb, var(--oc-guanine) 9%, var(--oc-surface));
+  --color-warn: var(--oc-thymine); --color-warn-subtle: color-mix(in srgb, var(--oc-thymine) 9%, var(--oc-surface));
+  --color-ok: var(--oc-adenine); --color-ok-subtle: color-mix(in srgb, var(--oc-adenine) 9%, var(--oc-surface));
+  --font-sans: var(--oc-font-ui); --font-mono: var(--oc-font-mono);
+  --radius-sm: var(--radius-btn); --radius-md: var(--radius-card); --radius-lg: var(--radius-card);
+  --shadow-pop: 0 0 0 1px var(--oc-border), 0 8px 24px #00000014;
+  --shadow-dialog: 0 0 0 1px var(--oc-border), 0 18px 48px #00000020;
+  --shadow-card: 0 0 0 1px var(--oc-border);
+}
+html, body, #root { height: 100%; min-height: 0; margin: 0; overflow: hidden; background: var(--oc-bg); }
+body { font-family: var(--oc-font-ui); }
+button, input, select, textarea { font-family: inherit; }
+input, textarea { border-color: var(--oc-input-border); }
+:focus-visible { outline-color: var(--oc-teal-hi); }
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-thumb { background: var(--oc-scroll-thumb); border-radius: 8px; }
+[data-omicos-brand] { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The original primary variant paired bg-ink with literal white text. Once ink
+ * follows a dark theme it becomes light: rebind the pair, not figure ink. */
+button.bg-ink.text-white { background-color: var(--oc-teal); color: var(--oc-bg); }
+button.bg-ink.text-white:hover:not(:disabled) { background-color: var(--oc-teal-hi); }
+
+/* --------------------------------------------------------------------------
+ * OmicOS figure studio canvas skin
+ *
+ * The editor is intentionally a quiet, white canvas surrounded by lightweight
+ * floating controls.  This is a brand layer: it changes the shell and control
+ * chrome only; figure objects, publication colours and rendering semantics are
+ * left untouched.
+ * -------------------------------------------------------------------------- */
+:root {
+  --oc-bg: #f2f8f5;
+  --oc-surface: #ffffff;
+  --oc-raised: #e7f0eb;
+  --oc-overlay: #dce9e2;
+  --oc-border: #d2e1d9;
+  --oc-border-hi: #b9cec2;
+  --oc-txt: #1d2923;
+  --oc-txt-2: #53675d;
+  --oc-txt-3: #788d82;
+  --oc-teal: #4d806b;
+  --oc-teal-hi: #3e705c;
+  --oc-teal-dim: #e3f0e9;
+  --oc-input-bg: #ffffff;
+  --oc-input-border: #c4d7cc;
+  --oc-scroll-thumb: #b9cec2;
+  --oc-font-ui: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --radius-card: 12px;
+  --radius-input: 8px;
+  --radius-btn: 8px;
+  --color-bg: var(--oc-bg);
+  --color-canvas: var(--oc-bg);
+  --color-surface: var(--oc-surface);
+  --color-surface-2: #f7fbf8;
+  --color-ink: var(--oc-txt);
+  --color-ink-2: var(--oc-txt-2);
+  --color-ink-3: var(--oc-txt-2);
+  --color-ink-faint: var(--oc-txt-3);
+  --color-border: var(--oc-border);
+  --color-border-strong: var(--oc-border-hi);
+  --color-border-control: var(--oc-border-hi);
+  --color-field: var(--oc-input-bg);
+  --color-field-hover: #eef7f1;
+  --color-accent: var(--oc-teal);
+  --color-accent-subtle: var(--oc-teal-dim);
+  --color-selected: var(--oc-teal-dim);
+  --color-sel: #5c9a7e;
+  --shadow-pop: 0 1px 2px rgba(43, 78, 59, .05), 0 8px 24px rgba(43, 78, 59, .10);
+  --shadow-dialog: 0 1px 2px rgba(43, 78, 59, .06), 0 24px 64px rgba(43, 78, 59, .18);
+  --shadow-card: 0 1px 2px rgba(43, 78, 59, .04), 0 3px 12px rgba(43, 78, 59, .06);
+}
+
+:root[data-theme='dark'] {
+  --oc-bg: #17231d;
+  --oc-surface: #213128;
+  --oc-raised: #263a2f;
+  --oc-overlay: #30483a;
+  --oc-border: #3d5547;
+  --oc-border-hi: #577362;
+  --oc-txt: #f1f7f2;
+  --oc-txt-2: #bad0c1;
+  --oc-txt-3: #8aa492;
+  --oc-teal: #84b99a;
+  --oc-teal-hi: #a0d1b1;
+  --oc-teal-dim: #2c4939;
+  --oc-input-bg: #1c2b22;
+  --oc-input-border: #4b6655;
+  --oc-scroll-thumb: #5b7765;
+}
+
+html, body, #root {
+  background: var(--oc-bg);
+}
+
+body {
+  color: var(--oc-txt);
+  letter-spacing: -0.005em;
+}
+
+/* The top controls read as one compact floating command bar. */
+#root > div > header {
+  height: 48px;
+  margin: 12px 14px 0;
+  padding: 0 12px;
+  border: 1px solid var(--oc-border);
+  border-radius: 12px;
+  background: var(--oc-surface);
+  box-shadow: var(--shadow-card);
+}
+
+#root > div > header button,
+#root > div > header [role='button'] {
+  border-radius: 8px;
+}
+
+/* Canvas tabs remain available, but visually sit as a small navigation strip. */
+#root > div > div:has(> [role='tablist']) {
+  height: 38px;
+  margin: 8px 14px 0;
+  padding: 0 10px;
+  border: 1px solid var(--oc-border);
+  border-radius: 10px;
+  background: var(--oc-surface);
+  box-shadow: 0 1px 2px rgba(43, 78, 59, .035);
+}
+
+/* The page is the work surface; the sidebars are cards docked to its edges. */
+[data-canvas-stage] {
+  background: var(--oc-bg) !important;
+}
+
+[data-left-drawer],
+[data-inspector-panel] {
+  margin: 10px 0;
+  border: 1px solid var(--oc-border) !important;
+  border-radius: 12px;
+  background: var(--oc-surface) !important;
+  box-shadow: var(--shadow-card);
+}
+
+[data-left-drawer] {
+  margin-left: 10px;
+  border-left-width: 1px !important;
+}
+
+[data-inspector-panel] {
+  margin-right: 10px;
+  border-right: 1px solid var(--oc-border);
+}
+
+[data-left-drawer] > div > :first-child,
+[data-inspector-panel] > div > :first-child {
+  min-height: 42px;
+  border-bottom: 1px solid var(--oc-border);
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+[data-left-drawer] [data-rail],
+[data-inspector-panel] button,
+#root > div > header button {
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+/* The icon rail is a tool palette instead of a dark application sidebar. */
+nav[style*='width'] {
+  margin: 10px 0 10px 10px;
+  border: 1px solid var(--oc-border);
+  border-radius: 12px;
+  background: var(--oc-surface);
+  box-shadow: var(--shadow-card);
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+nav[style*='width'] [data-rail] {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+nav[style*='width'] [data-rail][aria-expanded='true'] {
+  color: var(--oc-teal);
+  background: var(--oc-teal-dim);
+  box-shadow: inset 0 0 0 1px rgba(77, 128, 107, .16);
+}
+
+/* Common control polish: quiet fields, green primary action, no heavy ink blocks. */
+button, input, select, textarea {
+  border-radius: 8px;
+}
+
+input, select, textarea {
+  background: var(--oc-input-bg);
+  border-color: var(--oc-input-border);
+}
+
+button:hover:not(:disabled),
+[role='button']:hover:not([aria-disabled='true']) {
+  border-color: var(--oc-border-hi);
+}
+
+button.bg-ink.text-white {
+  background: var(--oc-teal);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(77, 128, 107, .20);
+}
+
+button.bg-ink.text-white:hover:not(:disabled) {
+  background: var(--oc-teal-hi);
+}
+
+/* Settings keeps every existing section, but gets the same clean card language. */
+[role='dialog']:has([data-settings-shell]) {
+  border: 1px solid var(--oc-border);
+  border-radius: 16px;
+  background: var(--oc-surface);
+  box-shadow: var(--shadow-dialog);
+}
+
+[role='dialog']:has([data-settings-shell]) > div:first-child {
+  min-height: 50px;
+  border-bottom-color: var(--oc-border);
+  background: var(--oc-surface);
+}
+
+[data-settings-shell] > nav {
+  width: 204px;
+  background: #f7fbf8;
+  border-right-color: var(--oc-border);
+  padding: 14px 12px;
+}
+
+:root[data-theme='dark'] [data-settings-shell] > nav {
+  background: #1b2a21;
+}
+
+[data-settings-shell] [data-nav-group] {
+  gap: 3px;
+}
+
+[data-settings-shell] [data-nav-group] > span {
+  padding: 4px 10px 6px;
+  color: var(--oc-txt-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+[data-settings-shell] [data-section] {
+  height: 34px;
+  border-radius: 8px;
+  padding-left: 10px;
+  color: var(--oc-txt-2);
+  font-size: 13px;
+}
+
+[data-settings-shell] [data-section][aria-current='true'] {
+  color: var(--oc-teal-hi);
+  background: var(--oc-teal-dim);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--oc-teal);
+}
+
+[data-settings-content] {
+  background: var(--oc-surface);
+  padding: 26px 30px;
+}
+
+[data-settings-content] h1,
+[data-settings-content] h2,
+[data-settings-content] h3 {
+  color: var(--oc-txt);
+  letter-spacing: -0.02em;
+}
+
+/* Popovers, menus and the selection toolbar share the same light floating-card cue. */
+[data-radix-popper-content-wrapper] > *,
+[role='menu'],
+[role='listbox'] {
+  border: 1px solid var(--oc-border) !important;
+  border-radius: 10px !important;
+  background: var(--oc-surface) !important;
+  box-shadow: var(--shadow-pop) !important;
+}
+
+[role='menuitem']:hover,
+[role='option']:hover,
+[role='menuitem'][data-highlighted] {
+  background: var(--oc-teal-dim) !important;
+  color: var(--oc-txt) !important;
+}
+
+/* Tooltip content has a deliberate dark surface.  The generic floating-card
+ * rule above also matches Radix tooltip portals; without this rebind the
+ * original `text-surface` token is white on a white card and the label appears
+ * to be missing. */
+[data-radix-popper-content-wrapper]:has([role='tooltip']) > [role='tooltip'] {
+  border-color: transparent !important;
+  border-radius: 8px !important;
+  background: #315346 !important;
+  color: #ffffff !important;
+  box-shadow: 0 5px 16px rgba(43, 78, 59, .18) !important;
+}
+
+[data-radix-popper-content-wrapper]:has([role='tooltip']) [role='tooltip'] span {
+  color: inherit !important;
+}
+
+:root[data-theme='dark']
+  [data-radix-popper-content-wrapper]:has([role='tooltip']) > [role='tooltip'] {
+  background: #dcefe3 !important;
+  color: #1d2923 !important;
+}
+
+@media (max-width: 700px) {
+  #root > div > header {
+    margin: 8px 8px 0;
+  }
+  #root > div > div:has(> [role='tablist']) {
+    margin-left: 8px;
+    margin-right: 8px;
+  }
+  nav[style*='width'] {
+    margin-left: 6px;
+  }
+  [data-left-drawer], [data-inspector-panel] {
+    margin-top: 6px;
+    margin-bottom: 6px;
+  }
+}

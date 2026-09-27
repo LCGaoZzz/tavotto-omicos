@@ -158,6 +158,9 @@ export function addRuntimePanel(desc: CapturedFigureDescriptor, atX?: number, at
     d.objects.push(obj)
   })
   select([obj.id])
+  // Runtime captures enter the same material list as file-backed figures; record
+  // their add time so the material browser's “加入时间” ordering is consistent.
+  useAssetStore.getState().markUsed(desc.asset_id)
   return obj
 }
 

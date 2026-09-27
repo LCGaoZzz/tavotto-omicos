@@ -538,6 +538,16 @@ describe('AI 修改之后（ADR 0041）', () => {
     markStale.mockRestore()
   })
 
+  it('只有老后端 ai.done 时也会按脚本刷新画布，不停在旧图', () => {
+    seed([panelObj('p1', 'Fig1.pdf', { script: 'fig1.py' })])
+    const markStale = vi.spyOn(useRenderStore.getState(), 'markStale')
+    handleServerEvent(
+      ev({ kind: 'ai.done', pj: 'p1', session: 's1', status: 'done', changed: true, diff: '+x', script: 'fig1.py' }),
+    )
+    expect(markStale).toHaveBeenCalledWith(['Fig1.pdf'])
+    markStale.mockRestore()
+  })
+
   it('watcher 发的 panel.file_changed（没有 reason）照旧提示「脚本已更新」', () => {
     seed([panelObj('p1', 'Fig1.pdf', { script: 'fig1.py' })])
     handleServerEvent(ev({ kind: 'panel.file_changed', pj: 'p1', scripts: ['fig1.py'], stems: ['Fig1'] }))

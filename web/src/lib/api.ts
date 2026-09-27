@@ -1,3 +1,4 @@
+import { diagnosticText } from '@/lib/figureError'
 import { apiUrl, apiUrlFor, withProject, withProjectFor } from '@/lib/session'
 import { formatMessage, i18n, literal, msg, t, type UiMessage } from '@/i18n'
 import type { FigureDocument, ProjectDocument } from '@/types/document'
@@ -180,10 +181,12 @@ export interface PanelsResponse {
 export class ApiError extends Error {
   status: number
   body: Record<string, unknown>
-  constructor(message: string, status: number, body: Record<string, unknown>) {
+  readonly rawDiagnostic: string
+  constructor(message: string, status: number, body: Record<string, unknown>, rawDiagnostic?: string) {
     super(message)
     this.status = status
     this.body = body
+    this.rawDiagnostic = rawDiagnostic ?? JSON.stringify(body)
   }
 }
 
@@ -219,6 +222,12 @@ export function backendErrorText(e: unknown): string {
  * code 照旧原文透出。两条控制面（Python 池 / workerd）走的都是同一形状。
  */
 export function engineErrorMsg(err: unknown): UiMessage {
+  const message = engineErrorMsgImpl(err)
+  const rawDiagnostic = diagnosticText(err)
+  Object.defineProperty(message, 'rawDiagnostic', { value: rawDiagnostic, enumerable: false })
+  return message
+}
+function engineErrorMsgImpl(err: unknown): UiMessage {
   if (err instanceof EngineError && err.code && i18n.exists(`backend.${err.code}`, { ns: 'errors' })) {
     const detail = err.traceback.trim().split('\n').at(-1)?.trim() ?? ''
     // 文案要 {{error}} 却拿不到 traceback（老 server / 精简错误体）时退回
@@ -235,6 +244,14 @@ export function engineErrorMsg(err: unknown): UiMessage {
 }
 
 export function backendErrorMsg(e: unknown): UiMessage {
+  const message = backendErrorMsgImpl(e)
+  const rawDiagnostic = e instanceof EngineError
+    ? JSON.stringify({message: e.message, traceback: e.traceback, code: e.code}, null, 2)
+    : diagnosticText(e)
+  Object.defineProperty(message, 'rawDiagnostic', { value: rawDiagnostic, enumerable: false })
+  return message
+}
+function backendErrorMsgImpl(e: unknown): UiMessage {
   if (e instanceof ApiError) {
     const code = typeof e.body?.code === 'string' ? e.body.code : ''
     return backendCodeMsg(code, (e.body?.params ?? {}) as Record<string, unknown>, e.message)
@@ -319,16 +336,16 @@ async function jsonFetch<T>(url: string, init?: RequestInit, pj?: string | null)
       ? await fetch(apiUrl(url), withProject(init))
       : await fetch(apiUrlFor(url, pj), withProjectFor(init, pj))
   if (!res.ok) {
+    const rawDiagnostic = await res.text()
     let detail = `HTTP ${res.status}`
     let body: Record<string, unknown> = {}
     try {
-      body = (await res.json()) as Record<string, unknown>
-      if (typeof body?.error === 'string') detail = body.error
-    } catch {
-      /* 非 JSON 错误体，保留状态码 */
-    }
+      const parsed: unknown = JSON.parse(rawDiagnostic)
+      if (parsed && typeof parsed === 'object') body = parsed as Record<string, unknown>
+      if (typeof body.error === 'string') detail = body.error
+    } catch { /* original non-JSON response remains in rawDiagnostic */ }
     noteProjectGone(res.status, body)
-    throw new ApiError(detail, res.status, body)
+    throw new ApiError(detail, res.status, body, rawDiagnostic)
   }
   return res.json() as Promise<T>
 }
@@ -1493,6 +1510,7 @@ export interface EngineRenderResponse {
 }
 
 export class EngineError extends Error {
+  readonly rawDiagnostic: string
   traceback: string
   /**
    * 机器可读的原因，界面据此换成对应的出口而不是甩错误文字：
@@ -1522,6 +1540,7 @@ export class EngineError extends Error {
     module = '',
     projectEnv?: ProjectEnvFailure,
     dependencyRepair?: DependencyRepairOffer,
+    rawDiagnostic?: string,
   ) {
     super(message)
     this.traceback = traceback
@@ -1529,6 +1548,7 @@ export class EngineError extends Error {
     this.module = module
     this.projectEnv = projectEnv
     this.dependencyRepair = dependencyRepair
+    this.rawDiagnostic = rawDiagnostic ?? JSON.stringify({ message, traceback, code, module, projectEnv, dependencyRepair })
   }
 }
 
@@ -1567,7 +1587,9 @@ export async function engineRender(
     }),
     signal: opts.signal,
   }))
-  const body = await res.json().catch(() => ({}) as Record<string, unknown>)
+  const rawDiagnostic = await res.text()
+  let body: Record<string, unknown> = {}
+  try { body = JSON.parse(rawDiagnostic) ?? {} } catch { /* original text is retained */ }
   if (!res.ok) {
     noteProjectGone(res.status, body)
     throw new EngineError(
@@ -1577,9 +1599,13 @@ export async function engineRender(
       (body.module as string) || '',
       body.project_env as ProjectEnvFailure | undefined,
       body.dependency_repair as DependencyRepairOffer | undefined,
+      rawDiagnostic,
     )
   }
-  return body as EngineRenderResponse
+  if (typeof body.rev !== 'number' || body.manifest === null || typeof body.manifest !== 'object') {
+    throw new EngineError('Invalid renderer response', undefined, 'invalid_response', undefined, undefined, undefined, rawDiagnostic)
+  }
+  return body as unknown as EngineRenderResponse
 }
 
 /**
@@ -1627,7 +1653,9 @@ export async function enginePreviewPng(
     signal,
   }))
   if (!res.ok) {
-    const body = await errorBody(res)
+    const rawDiagnostic = await res.text()
+    let body: Record<string, unknown> = {}
+    try { body = JSON.parse(rawDiagnostic) ?? {} } catch { /* original text is retained */ }
     noteProjectGone(res.status, body)
     throw new EngineError(
       (body.error as string) || t('render.previewPngFailed', { ns: 'errors', status: res.status }),
@@ -1636,6 +1664,7 @@ export async function enginePreviewPng(
       (body.module as string) || '',
       body.project_env as ProjectEnvFailure | undefined,
       body.dependency_repair as DependencyRepairOffer | undefined,
+      rawDiagnostic,
     )
   }
   return res.blob()
@@ -1986,6 +2015,7 @@ export interface AiRunRequest {
   scope?: string
   target?: string
   canvas?: string | null
+  history?: { role: 'user' | 'assistant'; content: string }[]
 }
 
 export const aiRun = (req: AiRunRequest) =>

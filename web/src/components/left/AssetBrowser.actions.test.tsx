@@ -205,12 +205,25 @@ describe('文件卡：两个动作', () => {
   })
 })
 
+describe('素材栏隐藏状态', () => {
+  it('单张素材移除后切换面板再回来仍保持隐藏，且不删除源文件', async () => {
+    seedPanels([panel('Fig1.pdf'), panel('Fig2.pdf')])
+    await mount()
+    await act(async () => chips(cardOf('Fig1.pdf'))[2].click())
+    expect(cardIds()).toEqual(['Fig2.pdf'])
+    await unmount()
+    await mount()
+    expect(cardIds()).toEqual(['Fig2.pdf'])
+    expect(useAssetStore.getState().panels.map((p) => p.id)).toEqual(['Fig1.pdf', 'Fig2.pdf'])
+  })
+})
+
 describe('运行时图卡', () => {
   it('跑过的：同一对动作（Shift+Enter 添加到画布走 addFigureToLayout，不复制）', async () => {
     useRuntimeAssetStore.setState({ assets: [runtime('show')] })
     await mount()
     const card = cardOf('runtime:fig.py#show')
-    expect(chips(card).map((c) => c.textContent?.trim())).toEqual(['编辑原图', '添加到画布'])
+    expect(chips(card).map((c) => c.textContent?.trim())).toEqual(['编辑原图', '添加到画布', '删除素材'])
     await key(card, 'Enter', true)
     expect(mockAdd).toHaveBeenCalledWith('runtime:fig.py#show')
     expect(mockOpen).not.toHaveBeenCalled()
@@ -222,7 +235,7 @@ describe('运行时图卡', () => {
     })
     await mount()
     const card = cardOf('runtime:fig.py#show')
-    expect(chips(card).map((c) => c.textContent?.trim())).toEqual(['运行并发现图'])
+    expect(chips(card).map((c) => c.textContent?.trim())).toEqual(['运行并发现图', '删除素材'])
     await key(card, 'Enter', true)
     expect(mockAdd).not.toHaveBeenCalled()
     await act(async () => card.click())

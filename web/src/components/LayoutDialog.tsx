@@ -1,17 +1,11 @@
+import { FigureError } from '@/components/FigureError'
+import { diagnosticText } from '@/lib/figureError'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { msg } from '@/i18n'
 import { FolderOpen, Save } from '@/components/ui/icons'
 import { ICON_SIZE } from '@/components/ui/Icon'
-import {
-  ApiError,
-  REVISION_ABSENT,
-  backendErrorText,
-  fetchLayout,
-  fetchLayoutNames,
-  saveLayout,
-  type DiskDocumentSummary,
-} from '@/lib/api'
+import { ApiError, REVISION_ABSENT, fetchLayout, fetchLayoutNames, saveLayout, type DiskDocumentSummary } from '@/lib/api'
 import { knownLayoutRevision, rememberLayoutRevision } from '@/lib/layoutRevision'
 import { normalizeLayout } from '@/lib/migrate'
 import { cn } from '@/lib/utils'
@@ -83,7 +77,7 @@ export function LayoutDialog() {
     // 要在用户按下按钮之前就说
     fetchLayoutNames()
       .then(setNames)
-      .catch((e) => setError(backendErrorText(e)))
+      .catch((e) => setError(diagnosticText(e)))
   }, [open, docName])
 
   // 从菜单进来时焦点直接落在用户选的那件事上。
@@ -134,7 +128,7 @@ export function LayoutDialog() {
           summary: (e as ApiError).body.summary as DiskDocumentSummary | null,
         })
       } else {
-        setError(backendErrorText(e))
+        setError(diagnosticText(e))
       }
     } finally {
       setBusy(false)
@@ -152,7 +146,7 @@ export function LayoutDialog() {
       openLayoutDocument(normalizeLayout(doc, target))
       setOpen(false)
     } catch (e) {
-      setError(backendErrorText(e))
+      setError(diagnosticText(e))
     } finally {
       setBusy(false)
     }
@@ -274,7 +268,7 @@ export function LayoutDialog() {
           </div>
         )}
 
-        {error && <p className="text-xs text-danger">{error}</p>}
+        {error && <p className="text-xs text-danger"><FigureError error={error} context="project" /></p>}
       </div>
     </Dialog>
   )

@@ -25,6 +25,8 @@ autosave / 版本历史目录（Prompt 02–03 的文档合同）。这个模块
 
 from __future__ import annotations
 
+from . import importscope
+
 import os
 import threading
 from collections.abc import Callable, Iterable, Sequence
@@ -240,7 +242,7 @@ _SCRIPT_FIELDS = ("entry", "cost", "notes")
 
 
 def _owners(snapshot: dict[str, dict]) -> dict[str, str]:
-    return {stem: script for script, cfg in snapshot.items() for stem in cfg["stems"]}
+    return {importscope.key(script, stem): script for script, cfg in snapshot.items() for stem in cfg["stems"]}
 
 
 def diff_registry(before: dict[str, dict], after: dict[str, dict]) -> dict:

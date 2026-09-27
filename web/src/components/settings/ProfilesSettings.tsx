@@ -378,7 +378,7 @@ export function ProfilesSettings({ kind }: { kind: ProfileKind }) {
       try {
         const a = document.createElement('a')
         a.href = url
-        a.download = `${selected.id}.tavotto-profile.json`
+        a.download = `${selected.id}.omicos-figure-profile.json`
         a.click()
       } finally {
         // 不撤销就是一条挂到刷新为止的引用
