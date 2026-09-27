@@ -36,4 +36,14 @@ the modifications:
 7. **Record build provenance** in `src/tavotto/_omicos_build.json` (channel, base
    commit, source digest, runtime version).
 
+## Identity of a built artifact
+
+This tree is the source channel OmicOS builds the runtime from. A built artifact
+records its own identity in `src/tavotto/_omicos_build.json` (channel, base commit,
+source digest, runtime version); that marker, not this README, is what the host
+application verifies before running it. Generated raster assets are regenerated
+during the build and are sensitive to the exact matplotlib/Pillow/libwebp versions,
+so a rebuild on a different toolchain can produce a different source digest while
+the code is identical — use `BUILD.md`'s pins if you want to match.
+
 No upstream copyright notice, licence text or contributor history has been removed.
