@@ -12,6 +12,10 @@
   `exec .venv/bin/tavotto`；**不要再写 `python app.py`**，
   根目录已无该文件（旧进程内存里的老路径正是「worker 进程崩溃（无响应）」的成因）。
 - extras：`worker`（matplotlib/numpy，装了就用同解释器渲染）、`dev`（pytest/build）。
+- **引擎独立发行包 `omicos-figure-engine`**（OmicOS 用）：`scripts/build_engine_package.py`
+  把 `src/tavotto/engine/` 里 worker 的 import 闭包（脚本里的 `ENGINE_MODULES`）staged 成
+  包 `omicos_figure_engine`，只依赖 matplotlib + numpy；清单与真实闭包双向相等由
+  `tests/test_engine_package.py` 看护。发布是显式的 `twine upload`，不进 release.yml。
 - 前端产物 `src/tavotto/web/` 由 `scripts/build_frontend.py` 从 `web/dist` 拷入，
   进 .gitignore；hatchling 默认跳过 VCS 忽略的文件，**必须靠 pyproject 的
   `[tool.hatch.build] artifacts` 收回**，否则 wheel 里没有界面（首页 404）。

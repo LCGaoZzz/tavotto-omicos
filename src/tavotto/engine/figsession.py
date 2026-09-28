@@ -430,7 +430,7 @@ class LiveFigureSession:
         # 起晚了的话异常路径上还原就不执行，这次预览专用的 patches 留在常驻
         # figure 上，此后前端手里的 lastPatches 与会话真实状态错位。
         try:
-            overrides_mod.apply(state, patches)
+            warnings = overrides_mod.apply(state, patches)
             w_in = float(state.fig.get_size_inches()[0])
             path = self.out_dir / f"{stem}__{tag}.png"
             self.out_dir.mkdir(parents=True, exist_ok=True)
@@ -438,7 +438,10 @@ class LiveFigureSession:
                 state.fig.savefig(path, format="png", dpi=max(50, int(width) / w_in))
         finally:
             overrides_mod.apply(state, prev)
-        return {"path": str(path)}
+        # `warnings` 与 render / export 同一条口径（孤儿 gid、不支持的 prop、
+        # 越界的值）：一次预览静默吞掉「我改了但没生效」，调用方就没有任何
+        # 线索。还原那次的 warnings 照旧丢弃。加字段不升版（ADR 0003 §1）。
+        return {"path": str(path), "warnings": warnings}
 
     def do_export(
         self,

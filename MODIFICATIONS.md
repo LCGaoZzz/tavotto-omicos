@@ -35,6 +35,16 @@ the modifications:
    (`web/src/components/FigureError.tsx` and friends).
 7. **Record build provenance** in `src/tavotto/_omicos_build.json` (channel, base
    commit, source digest, runtime version).
+8. **Publish the engine on its own** as the `omicos-figure-engine` distribution
+   (`scripts/build_engine_package.py`): exactly the worker's import closure from
+   `src/tavotto/engine/`, staged as the package `omicos_figure_engine`, depending on
+   matplotlib and numpy only (no Flask, no PyMuPDF, no web assets). OmicOS drives it
+   over wire protocol v1 in the user's own interpreter. Alongside: `ping` now reports
+   the engine identity and interpreter versions, `preview_png` reports override
+   warnings like `render`/`export` do (both additive, protocol version unchanged),
+   and the OmicVerse `marker_heatmap` shim is installed by a post-import hook only
+   after a script imports `omicverse.pl`, instead of importing OmicVerse eagerly on
+   every build.
 
 ## Identity of a built artifact
 
