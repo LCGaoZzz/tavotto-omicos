@@ -184,6 +184,15 @@ class V1Handler:
     def handle_extra(self, cmd: str, req: dict, payload: dict) -> dict:
         raise ProtocolError("unknown_cmd", f"未知指令: {cmd}")
 
+    def ping_info(self) -> dict:
+        """`ping` 成功响应的 body。默认空——`{ok, …echo}` 是 v1 的最小形状。
+
+        执行侧可以在这里报自己的身份（引擎名 / 解释器 / matplotlib 版本），
+        supervisor 拿它做环境记账。**只加字段，不升协议版本**（ADR 0003 §1：
+        两侧都必须容忍未知字段），也不许在这里 import 任何科学栈之外的东西。
+        """
+        return {}
+
     # ---------------- 分派 ----------------
     def handle_v1(self, req: dict) -> dict:
         """v1 信封 → v1 响应。抛 `ProtocolError` 由 `v1_error()` 转成错误信封。
@@ -223,7 +232,7 @@ class V1Handler:
         if cmd == "shutdown":
             raise SystemExit(0)
         if cmd == "ping":
-            return {}
+            return self.ping_info()
         if cmd == "cancel":
             return self.cancel(payload)
 

@@ -11,3 +11,17 @@ release.yml 的「拼 release body」当场红（scripts/check_pending_release_n
 
 英文写，与 release notes 一致：**按症状和触发条件写，不要按提交写**。
 -->
+
+## Engine-only package `omicos-figure-engine`; OmicVerse no longer imported eagerly
+
+- A new distribution, `omicos-figure-engine`, ships just the rendering worker and
+  its modules (`python -m omicos_figure_engine.worker`), depending on matplotlib and
+  numpy only. Build it with `python scripts/build_engine_package.py --version X.Y.Z`.
+- Opening any figure in an environment that has OmicVerse installed used to take
+  10–30 s before the script even ran, because the worker imported OmicVerse on every
+  build to patch `marker_heatmap`. The patch is now applied the moment a script
+  imports `omicverse.pl`; scripts that never touch OmicVerse start immediately.
+- Protocol additions (no version bump): `ping` replies carry `python`, `matplotlib`
+  and, in the packaged engine, `engine` / `engine_version`; `preview_png` replies
+  carry `warnings` (orphan gids, unsupported props, rejected values), the same list
+  `render` and `export` already returned.

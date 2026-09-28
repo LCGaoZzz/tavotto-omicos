@@ -34,16 +34,17 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import contextlib
 import importlib
+import importlib.abc
 import json
 import os
+import runpy
 import shutil
 import sys
 import time
 import traceback
-import ast
-import runpy
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -82,6 +83,77 @@ ProtocolError = wireproto.ProtocolError
 _ms = figsession.ms_since
 
 
+#: 与 OmicVerse 兼容垫片相关的**唯一**触发点。垫片只改 `ov.pl.marker_heatmap`，
+#: 而 `omicverse.pl` 是 OmicVerse 的懒加载子包：装了 OmicVerse 的分析环境里
+#: import 它要 10–30 秒（scipy.stats / anndata / 一整个绘图栈）。此前 build 无
+#: 条件先 import 一遍，于是**每一张普通 matplotlib 图**的冷启动都替 OmicVerse
+#: 付这笔钱（实测 12.4 s / 12.9 s 的 build 全在这里，脚本本身 19 ms）。
+#: 现在只在 `omicverse.pl` **真的被脚本 import 完成之后**再打垫片：
+#: 一个 meta_path 后置钩子，找到真正的 spec、让真 loader 跑完 exec_module、
+#: 随后立刻安装垫片并把自己摘掉。没 import 过 OmicVerse 的脚本一分钱不付；
+#: 进程里已经 import 过的（sitecustomize 之类）当场打，钩子不装。
+_OMICVERSE_PL = "omicverse.pl"
+
+
+class _OmicverseCompatHook(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+    def __init__(self) -> None:
+        self._real_loader = None
+
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname != _OMICVERSE_PL:
+            return None
+        for finder in sys.meta_path:
+            if finder is self:
+                continue
+            find = getattr(finder, "find_spec", None)
+            if find is None:
+                continue
+            spec = find(fullname, path, target)
+            if spec is not None and spec.loader is not None:
+                self._real_loader = spec.loader
+                spec.loader = self
+                return spec
+        return None
+
+    def create_module(self, spec):
+        create = getattr(self._real_loader, "create_module", None)
+        return create(spec) if create is not None else None
+
+    def exec_module(self, module):
+        try:
+            self._real_loader.exec_module(module)
+        finally:
+            with contextlib.suppress(ValueError):
+                sys.meta_path.remove(self)
+        _install_omicverse_compat()
+
+
+def _install_omicverse_compat_lazily() -> None:
+    """装钩子，或者（已经 import 过时）当场打垫片；绝不主动 import OmicVerse。"""
+    if _OMICVERSE_PL in sys.modules:
+        _install_omicverse_compat()
+        return
+    if any(isinstance(f, _OmicverseCompatHook) for f in sys.meta_path):
+        return
+    sys.meta_path.insert(0, _OmicverseCompatHook())
+
+
+def _engine_identity() -> dict:
+    """`ping` 里报的引擎身份。独立发行包的构建脚本会在旁边放一份 `_build.json`
+    （名字、版本、基线提交）；源码树里没有这份文件，就只报解释器与 matplotlib。"""
+    info = {"python": sys.version.split()[0], "matplotlib": matplotlib.__version__}
+    marker = HERE / "_build.json"
+    try:
+        data = json.loads(marker.read_text(encoding="utf-8")) if marker.is_file() else {}
+    except (OSError, ValueError):
+        data = {}
+    for key in ("engine", "engine_version", "base_commit"):
+        value = data.get(key)
+        if isinstance(value, str) and value:
+            info[key] = value
+    return info
+
+
 def _install_omicverse_compat() -> None:
     """Keep common OmicVerse plots renderable in the managed worker.
 
@@ -96,8 +168,8 @@ def _install_omicverse_compat() -> None:
     """
     try:
         import numpy as np
-        import pandas as pd
         import omicverse as ov
+        import pandas as pd
     except Exception:  # noqa: BLE001 - OV is optional for ordinary Matplotlib scripts
         return
     plotting = getattr(ov, "pl", None)
@@ -158,7 +230,9 @@ def _install_omicverse_compat() -> None:
         lookup = {name: i for i, name in enumerate(names)}
         genes = []
         for values in marker_genes_dict.values():
-            genes.extend([str(values)] if isinstance(values, str) else [str(value) for value in values])
+            genes.extend(
+                [str(values)] if isinstance(values, str) else [str(value) for value in values]
+            )
         genes = [gene for gene in genes if gene in lookup]
         if not genes:
             return None
@@ -174,7 +248,9 @@ def _install_omicverse_compat() -> None:
             mask = np.asarray([value == label for value in values], dtype=bool)
             subset = matrix[mask]
             means.append(np.nanmean(subset, axis=0) if subset.size else np.zeros(len(genes)))
-            fractions.append(np.mean(subset > expression_cutoff, axis=0) if subset.size else np.zeros(len(genes)))
+            fractions.append(
+                np.mean(subset > expression_cutoff, axis=0) if subset.size else np.zeros(len(genes))
+            )
         means = np.nan_to_num(np.asarray(means, dtype=float))
         fractions = np.nan_to_num(np.asarray(fractions, dtype=float))
         if standard_scale == "var":
@@ -187,6 +263,7 @@ def _install_omicverse_compat() -> None:
             means = np.divide(means - low, span, out=np.zeros_like(means), where=span > 0)
         if ax is None:
             import matplotlib.pyplot as plt
+
             _, ax = plt.subplots(figsize=figsize)
         fig = ax.figure
         image = ax.imshow(means, aspect="auto", cmap=color_map)
@@ -202,10 +279,17 @@ def _install_omicverse_compat() -> None:
         for row in range(len(labels)):
             for col in range(len(genes)):
                 if fractions[row, col] > 0:
-                    ax.add_patch(__import__("matplotlib").patches.Rectangle(
-                        (col - 0.5, row - 0.5), 1, 1, fill=False,
-                        edgecolor="white", linewidth=0.35, alpha=float(fractions[row, col]),
-                    ))
+                    ax.add_patch(
+                        __import__("matplotlib").patches.Rectangle(
+                            (col - 0.5, row - 0.5),
+                            1,
+                            1,
+                            fill=False,
+                            edgecolor="white",
+                            linewidth=0.35,
+                            alpha=float(fractions[row, col]),
+                        )
+                    )
         fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
         fig.tight_layout()
         if save_path is not None:
@@ -215,7 +299,13 @@ def _install_omicverse_compat() -> None:
     def compat_marker_heatmap(adata, marker_genes_dict=None, groupby=None, *args, **kwargs):
         adapted, inferred_groupby = _groups(adata, marker_genes_dict, groupby)
         try:
-            result = original(adapted, marker_genes_dict=marker_genes_dict, groupby=inferred_groupby, *args, **kwargs)
+            result = original(
+                adapted,
+                marker_genes_dict=marker_genes_dict,
+                groupby=inferred_groupby,
+                *args,
+                **kwargs,
+            )
             if result is not None:
                 return result
         except (ImportError, ModuleNotFoundError) as exc:
@@ -313,10 +403,7 @@ class Worker(wireproto.V1Handler):
         future = []
         rest = []
         for node in tree.body:
-            if (
-                isinstance(node, ast.ImportFrom)
-                and node.module == "__future__"
-            ):
+            if isinstance(node, ast.ImportFrom) and node.module == "__future__":
                 future.append(node)
             else:
                 rest.append(node)
@@ -358,8 +445,7 @@ class Worker(wireproto.V1Handler):
 
         def _log(exc):
             print(
-                "[compat] 跳过历史脚本中的独立语句: "
-                f"{type(exc).__name__}: {exc}",
+                f"[compat] 跳过历史脚本中的独立语句: {type(exc).__name__}: {exc}",
                 file=sys.stderr,
             )
 
@@ -487,10 +573,11 @@ class Worker(wireproto.V1Handler):
                 stem, fig, figcapture.SOURCE_SAVEFIG
             )
 
-        # OmicVerse is an optional analysis dependency.  If it is present,
-        # install the narrow compatibility shim before user code imports it so
-        # marker_heatmap figures remain renderable in a minimal worker env.
-        _install_omicverse_compat()
+        # OmicVerse is an optional analysis dependency.  The narrow
+        # marker_heatmap shim is installed the moment the script finishes
+        # importing `omicverse.pl` (post-import hook) — never eagerly, because
+        # importing OmicVerse costs 10–30 s and most figures never touch it.
+        _install_omicverse_compat_lazily()
 
         # 脚本看到的 argv 必须是它自己的，不是 worker 的。不换的话
         # `sys.argv[1:]` 拿到的是 --script/--out-dir/--entry 这串内部参数，
@@ -684,6 +771,10 @@ class Worker(wireproto.V1Handler):
                 retryable=False,
                 traceback_text=traceback.format_exc(),
             ) from exc
+
+    def ping_info(self) -> dict:
+        """`ping` 报引擎身份（加字段不升版；分派逻辑在 `wireproto.V1Handler`）。"""
+        return _engine_identity()
 
     def build_result(self, timings: dict) -> dict:
         """v1 build 响应的 body（分派逻辑在 `wireproto.V1Handler`）。
