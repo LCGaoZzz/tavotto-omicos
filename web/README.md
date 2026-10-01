@@ -86,20 +86,20 @@ src/
 
 改动落盘后 watcher 会作废渲染会话，前端据此重建图表；回滚同理。
 
-## 作为 npm 包使用（`@omicverse/tavotto-web`）
+## 作为 npm 包使用（`tavotto-omicos-web`）
 
 这个目录同时作为 npm 包发布，供宿主应用（如 omicOS-ui）嵌入工作台界面，
 而不是把源码复制一份进去。
 
 ```bash
-npm i @omicverse/tavotto-web react react-dom
+npm i tavotto-omicos-web react react-dom
 ```
 
 ```ts
 import { createRoot } from 'react-dom/client'
 import { createElement } from 'react'
-import { App, currentProjectId, setCurrentProjectId, migrateToProject } from '@omicverse/tavotto-web'
-import '@omicverse/tavotto-web/style.css'   // 样式不自动注入，宿主导入一次
+import { App, currentProjectId, setCurrentProjectId, migrateToProject } from 'tavotto-omicos-web'
+import 'tavotto-omicos-web/style.css'   // 样式不自动注入，宿主导入一次
 
 createRoot(el).render(createElement(App))
 ```

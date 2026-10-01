@@ -1,5 +1,5 @@
 /**
- * Published entry point (`@omicverse/tavotto-web`).
+ * Published entry point (`tavotto-omicos-web`).
  *
  * The workbench is a Vite APP, not a library: its sources import through the
  * `@` / `@profiles` / `@glyphcoverage` aliases ~2900 times, and two of those
@@ -14,7 +14,7 @@
  * host's bundle breaks hooks.
  *
  * The stylesheet is NOT injected; import it once in the host:
- *   import '@omicverse/tavotto-web/style.css'
+ *   import 'tavotto-omicos-web/style.css'
  */
 import './index.css'
 import './omicos-theme.css'

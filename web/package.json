@@ -1,5 +1,5 @@
 {
-  "name": "@omicverse/tavotto-web",
+  "name": "tavotto-omicos-web",
   "version": "0.1.0",
   "description": "OmicOS build of the Tavotto figure workbench (React) — embeddable in a host application.",
   "license": "AGPL-3.0-only",
@@ -40,9 +40,6 @@
   },
   "module": "./dist-lib/index.js",
   "types": "./dist-lib/embed.d.ts",
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && node scripts/tailwind-scan-check.mjs",
