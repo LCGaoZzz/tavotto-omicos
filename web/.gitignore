@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# npm 库构建产物（`npm run build:lib`，发包前自动重建）
+dist-lib

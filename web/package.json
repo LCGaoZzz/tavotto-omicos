@@ -1,8 +1,48 @@
 {
-  "name": "tavotto-web",
-  "private": true,
+  "name": "@omicverse/tavotto-web",
   "version": "0.1.0",
+  "description": "OmicOS build of the Tavotto figure workbench (React) — embeddable in a host application.",
+  "license": "AGPL-3.0-only",
+  "author": "OmicOS (OmicVerse)",
+  "homepage": "https://github.com/omicverse/tavotto-omicos",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omicverse/tavotto-omicos.git",
+    "directory": "web"
+  },
+  "bugs": {
+    "url": "https://github.com/omicverse/tavotto-omicos/issues"
+  },
+  "keywords": [
+    "figure",
+    "canvas",
+    "matplotlib",
+    "omicos",
+    "publication",
+    "react"
+  ],
   "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
+  "files": [
+    "dist-lib",
+    "LICENSE",
+    "MODIFICATIONS.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist-lib/embed.d.ts",
+      "import": "./dist-lib/index.js"
+    },
+    "./style.css": "./dist-lib/style.css",
+    "./package.json": "./package.json"
+  },
+  "module": "./dist-lib/index.js",
+  "types": "./dist-lib/embed.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && node scripts/tailwind-scan-check.mjs",
@@ -15,7 +55,13 @@
     "i18n:check": "i18next-cli types --ci && node scripts/i18n-check.mjs && i18next-cli lint",
     "preview": "vite preview",
     "e2e": "playwright test",
-    "e2e:ui": "playwright test --ui"
+    "e2e:ui": "playwright test --ui",
+    "build:lib": "vite build --config vite.lib.config.ts && tsc -p tsconfig.lib.json && node scripts/fix-lib-dts.mjs",
+    "prepublishOnly": "npm run build:lib"
+  },
+  "peerDependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",
@@ -39,12 +85,11 @@
     "clsx": "^2.1.1",
     "i18next": "^26.3.6",
     "immer": "^11.1.16",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
     "react-i18next": "^17.0.11",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.6.0",
+    "use-sync-external-store": "^1.6.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

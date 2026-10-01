@@ -85,3 +85,32 @@ src/
 （可放大到对话框）与「回滚此次修改」。
 
 改动落盘后 watcher 会作废渲染会话，前端据此重建图表；回滚同理。
+
+## 作为 npm 包使用（`@omicverse/tavotto-web`）
+
+这个目录同时作为 npm 包发布，供宿主应用（如 omicOS-ui）嵌入工作台界面，
+而不是把源码复制一份进去。
+
+```bash
+npm i @omicverse/tavotto-web react react-dom
+```
+
+```ts
+import { createRoot } from 'react-dom/client'
+import { createElement } from 'react'
+import { App, currentProjectId, setCurrentProjectId, migrateToProject } from '@omicverse/tavotto-web'
+import '@omicverse/tavotto-web/style.css'   // 样式不自动注入，宿主导入一次
+
+createRoot(el).render(createElement(App))
+```
+
+- **发的是构建产物不是源码**：源码里 `@/`、`@profiles`、`@glyphcoverage`
+  这几个别名用了近 2900 次，其中两个还指向 `web/` 之外的 Python 包
+  （出版规范 profile、字形覆盖表，各自只允许有一份权威副本）。发源码等于要求
+  每个消费方复刻这套构建，所以别名在 `vite.lib.config.ts` 里构建时解析掉。
+- **`react` / `react-dom` 是 peer**：宿主必须持有唯一的 React 实例，两份会让
+  hooks 失效。
+- 公开面只有 `src/embed.ts` 一个文件，改它等于改契约。
+- 构建：`npm run build:lib`（产物在 `dist-lib/`，`npm publish` 前自动跑）。
+- 许可证 **AGPL-3.0-only**，与 `omicos-figure-engine`（Python 渲染引擎）一致；
+  两者同源于本仓库，见根目录 `MODIFICATIONS.md`。

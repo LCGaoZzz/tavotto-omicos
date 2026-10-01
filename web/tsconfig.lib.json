@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationDir": "./dist-lib",
+    "outDir": "./dist-lib",
+    "rootDir": "./src",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "skipLibCheck": true
+  },
+  "include": ["src/embed.ts", "src/App.tsx", "src/lib/session.ts", "src/types/document.ts"]
+}
