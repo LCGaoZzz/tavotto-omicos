@@ -54,11 +54,14 @@ export function McpApp({
   const leftOpen = useUiStore((s) => s.leftOpen)
   const rightOpen = useUiStore((s) => s.rightOpen)
 
-  // MCP 会话绕过桌面版 App 的布局初始化。始终从官方 Inspector 的属性页开始，
-  // 这样画布设置、对象属性、助手三个页签与 Tavotto 主应用保持同一套状态和操作。
+  // MCP 会话绕过桌面版 App 的布局初始化。等 hydration 把首个 panel 装进
+  // document 后再打开官方 Inspector；过早设置会被 session restore 的布局快照覆盖。
+  const inspectorInitialized = useRef(false)
   useEffect(() => {
+    if (inspectorInitialized.current || !panel) return
+    inspectorInitialized.current = true
     if (!useUiStore.getState().rightOpen) useUiStore.getState().setRightTab('properties')
-  }, [])
+  }, [panel])
 
   // usePanelRender 接受 null（面板还没到位时不该造一个假对象骗它）
   const render = usePanelRender(panel)
