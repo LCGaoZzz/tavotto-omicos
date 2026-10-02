@@ -133,6 +133,12 @@ export async function seedBlankSession(open: OpenFigureResult): Promise<{ panelI
   useRuntimeAssetStore.getState().clear()
   useRuntimeAssetStore.setState({ assets: [], assetsLoading: false, assetsError: null })
   useScriptLibraryStore.getState().clear()
+  // No HTTP server exists inside an MCP iframe. An empty project has an empty
+  // registry, not an offline registry; do not trigger ScriptLibrary's fetch.
+  useScriptLibraryStore.setState({
+    view: { source: 'mcp-session', scripts: {}, candidates: [], conflicts: {}, all_scripts: [] },
+    loaded: true, loading: false, error: null,
+  })
 
   const panels: PanelInfo[] = (open.assets ?? []).map((asset) => {
     const mime = asset.mime?.toLowerCase() ?? ''

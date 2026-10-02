@@ -131,13 +131,25 @@ _REAL_SHOW = None
 # ---------------------------------------------------------------------------
 @contextlib.contextmanager
 def _no_capture():
-    """引擎自己出图的那一段：透传照旧，但不记进捕获表。"""
+    """引擎自己出图的那一段：透传照旧，但不记进捕获表。
+
+    OmicOS replay sources may install their own ``Figure.savefig`` gate to
+    keep sibling figures out of a selected session.  During a Tavotto-owned
+    export that gate must be temporarily removed; otherwise the private export
+    filename does not match the source stem and no PDF/PNG is written.
+    """
     global _CAPTURING
     prev = _CAPTURING
+    mfigure = sys.modules.get("matplotlib.figure")
+    previous_savefig = getattr(getattr(mfigure, "Figure", None), "savefig", None)
     _CAPTURING = False
+    if mfigure is not None and _REAL_SAVEFIG is not None:
+        mfigure.Figure.savefig = _REAL_SAVEFIG
     try:
         yield
     finally:
+        if mfigure is not None and previous_savefig is not None:
+            mfigure.Figure.savefig = previous_savefig
         _CAPTURING = prev
 
 

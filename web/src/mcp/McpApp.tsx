@@ -1,14 +1,13 @@
 import { FigureError } from '@/components/FigureError'
 import { CommandPalette } from '@/components/CommandPalette'
 import { MarkTools } from '@/components/TopBar'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import { Check, Download, Lightbulb, LoaderCircle, Redo2, Undo2, ShieldCheck, ShieldQuestionMark, TriangleAlert } from '@/components/ui/icons'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Check, Download, LoaderCircle, Redo2, Undo2, ShieldCheck, ShieldQuestionMark, TriangleAlert } from '@/components/ui/icons'
 import { ICON_SIZE } from '@/components/ui/Icon'
 import { Checkbox } from '@/components/ui/Checkbox'
 import { CanvasStage } from '@/canvas/CanvasStage'
 import { CanvasTabs } from '@/components/CanvasTabs'
-import { ElementInspector } from '@/components/inspector/ElementInspector'
+import { Inspector } from '@/components/inspector/Inspector'
 import { LeftPanel } from '@/components/left/LeftPanel'
 import { LeftRail } from '@/components/left/LeftRail'
 import { useEngineSync } from '@/hooks/useEngineSync'
@@ -19,13 +18,13 @@ import { usePanelRender } from '@/store/renderStore'
 import { useUiStore } from '@/store/uiStore'
 import type { PanelObject } from '@/types/document'
 import type { AppsBridge } from './appsBridge'
-import { sessionIdFor, unwrap, type OpenFigureResult, type PreflightIssuePayload, type PreflightPayload } from './session'
+import { sessionIdFor, unwrap, type OpenFigureResult, type PreflightPayload } from './session'
 
 /**
  * Codex 内嵌的 Tavotto 画布。
  *
  * 这个组件本身**不做任何图形编辑逻辑**——拖拽、命中测试、shift 锁向、吸附、
- * 属性表单、撤销重做全部由 `CanvasStage` / `ElementInspector` / 既有 stores
+ * 属性表单、撤销重做全部由 `CanvasStage` / `Inspector` / 既有 stores
  * 承担，与 Tavotto 桌面版跑的是同一份代码。这里只负责三件事：
  *
  *   1. 顶部把「按哪套规范、多大、预检怎么样、有没有还没画上的改动、渲染错了没」
@@ -53,6 +52,13 @@ export function McpApp({
   const undo = useDocumentStore((s) => s.undo)
   const redo = useDocumentStore((s) => s.redo)
   const leftOpen = useUiStore((s) => s.leftOpen)
+  const rightOpen = useUiStore((s) => s.rightOpen)
+
+  // MCP 会话绕过桌面版 App 的布局初始化。始终从官方 Inspector 的属性页开始，
+  // 这样画布设置、对象属性、助手三个页签与 Tavotto 主应用保持同一套状态和操作。
+  useEffect(() => {
+    if (!useUiStore.getState().rightOpen) useUiStore.getState().setRightTab('properties')
+  }, [])
 
   // usePanelRender 接受 null（面板还没到位时不该造一个假对象骗它）
   const render = usePanelRender(panel)
@@ -132,21 +138,6 @@ export function McpApp({
   }, [bridge, panel?.w, panel?.h])
 
   const counts = preflight?.counts ?? {}
-  const issues = useMemo(
-    () =>
-      preflight
-        ? [
-            // **每一段都兜底**：`open.preflight` 是别的进程给的负载，某一档为空
-            // 时整个画布会在渲染前抛掉——那时候用户看到的是白屏，而不是一张图
-            // （issue #102 那轮改动差点这么干；判据只挡住了它自己那一侧）
-            ...(preflight.errors ?? []),
-            ...(preflight.warnings ?? []),
-            ...(preflight.not_verifiable ?? []),
-            ...(preflight.suggestions ?? []),
-          ]
-        : [],
-    [preflight],
-  )
   const needsConfirm =
     !!preflight
     && ((preflight.errors ?? []).length > 0 || (preflight.not_verifiable ?? []).length > 0)
@@ -258,17 +249,7 @@ export function McpApp({
             <CanvasStage />
           </div>
         </div>
-        <aside className="flex w-[304px] shrink-0 flex-col overflow-y-auto border-l border-border bg-surface">
-          {panel ? <ElementInspector panel={panel} /> : (
-            <div className="p-3 text-xs leading-relaxed text-ink-2">
-              {translate('mcp.blankInspectorHint', {
-                ns: 'dialogs',
-                defaultValue: '选择素材或插入文字、形状后，这里会显示对象属性。',
-              })}
-            </div>
-          )}
-          {panel && <IssueList issues={issues} stale={preflightStale} panel={panel} />}
-        </aside>
+        {rightOpen && <Inspector />}
       </div>
       <CommandPalette />
     </div>
@@ -394,74 +375,3 @@ function PreflightPill({
 /** MCP 画布这一屏的文案都在 `dialogs:mcp.*` 下 */
 const mc = (key: string, values?: Record<string, unknown>) =>
   translate(`mcp.${key}`, { ns: 'dialogs', ...(values ?? {}) })
-
-const SEVERITY_ICON = {
-  error: TriangleAlert,
-  warn: TriangleAlert,
-  not_verifiable: ShieldQuestionMark,
-  suggestion: Lightbulb,
-} as const
-
-/** 预检条目的显示文案：有描述符按本地 locale 渲染，否则回退 Python 成文 */
-const issueDisplayText = (it: PreflightIssuePayload): string =>
-  it.message?.key
-    ? translate(`preflight.${it.message.key}`, {
-        ns: 'errors',
-        defaultValue: it.text,
-        ...(it.message.params ?? {}),
-      })
-    : it.text
-
-function IssueList({
-  issues,
-  stale,
-  panel,
-}: {
-  issues: PreflightIssuePayload[]
-  stale: boolean
-  panel: PanelObject
-}) {
-  // 订阅语言变化：宿主中途切 locale（host-context-changed）时，
-  // 预检条目要跟着重译，不能停在挂载那一刻的语言上
-  useTranslation('errors')
-  const setSelectedGids = useUiStore((s) => s.setSelectedGids)
-  const manifest = usePanelRender(panel)?.manifest
-  if (!issues.length) return null
-  return (
-    <section className="border-t border-border p-2">
-      <h3 className="mb-1.5 text-xs text-ink-3">
-        {stale ? mc('issuesTitleStale') : mc('issuesTitle')}
-      </h3>
-      <ul className="flex flex-col gap-1.5">
-        {issues.map((it) => {
-          const Icon = SEVERITY_ICON[it.severity]
-          // 只有当 gid 真的在当前 manifest 里才给「定位」——图改过之后
-          // 旧结论里的 gid 可能已经不存在，点了什么都不会发生比点了会选错更好
-          const gids = it.gids.filter((g) => manifest?.elements.some((e) => e.gid === g))
-          return (
-            <li key={it.id}>
-              <button
-                disabled={!gids.length}
-                onClick={() => setSelectedGids(gids)}
-                className="flex w-full items-start gap-1.5 text-left text-xs leading-relaxed text-ink-2 disabled:cursor-default"
-              >
-                <Icon
-                  size={ICON_SIZE.sm}
-                  className={cn(
-                    'mt-px shrink-0',
-                    it.severity === 'error' ? 'text-danger' : 'text-ink-3',
-                  )}
-                />
-                {/* issue #30：Python 求值器随 issue 发可翻译描述符（message =
-                    key + params，golden vectors 与前端求值器逐字对齐），这里按
-                    webview 自己的 locale 渲染；老引擎没有 message、或 key 尚未
-                    登记（引擎比界面新）时回退 Python 的成文 text。 */}
-                <span className="min-w-0 flex-1">{issueDisplayText(it)}</span>
-              </button>
-            </li>
-          )
-        })}
-      </ul>
-    </section>
-  )
-}
