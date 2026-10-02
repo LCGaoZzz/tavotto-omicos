@@ -6,7 +6,13 @@ import { normalizeLocale } from '@/i18n/locale'
 import { AppsBridge, hostFallback } from './appsBridge'
 import { McpApp } from './McpApp'
 import { McpProviders } from './McpProviders'
-import { installMcpTransport, seedSession, type OpenFigureResult } from './session'
+import {
+  appendSession,
+  installMcpTransport,
+  seedSession,
+  type OpenFigureResult,
+  unwrap,
+} from './session'
 import '@/index.css'
 import '@/omicos-theme.css'
 
@@ -30,6 +36,36 @@ const bridge = new AppsBridge()
 // 传输必须先装：store 一旦挂载就可能发渲染请求，那时候拿到默认的 HTTP 传输
 // 会打到一个不存在的 /api（iframe 里没有 Tavotto 服务）
 installMcpTransport(bridge)
+
+/** Hydrate sibling registered figures into the same real composition. */
+async function hydrateSiblingSessions(open: OpenFigureResult): Promise<void> {
+  const stems = Array.from(
+    new Set((open.registry?.stems ?? []).filter((stem) => stem && stem !== open.stem)),
+  ).slice(0, 7)
+  if (!stems.length) return
+  try {
+    const batch = unwrap(await bridge.callTool('tavotto_open_figure', {
+      project_path: open.project,
+      stems,
+    }))
+    const opened = Array.isArray(batch.opened) ? batch.opened : []
+    for (const entry of opened) {
+      const sessionId =
+        entry && typeof entry === 'object' && typeof (entry as { session_id?: unknown }).session_id === 'string'
+          ? (entry as { session_id: string }).session_id
+          : null
+      if (!sessionId) continue
+      try {
+        const sibling = unwrap(await bridge.callTool('tavotto_session_state', { session_id: sessionId }))
+        if (isOpenResult(sibling)) appendSession(sibling)
+      } catch (error) {
+        console.warn('[tavotto] sibling session state unavailable', error)
+      }
+    }
+  } catch (error) {
+    console.warn('[tavotto] sibling figure hydration unavailable', error)
+  }
+}
 
 /**
  * 只接受**完整的** open 结果。
@@ -69,6 +105,7 @@ function Boot() {
       setOpen(payload)
       setPanelId(pid)
       setState('ready')
+      void hydrateSiblingSessions(payload)
     }
 
     // 画布跟随 **Codex host** 的界面语言（issue #30）：iframe 自己探测到的

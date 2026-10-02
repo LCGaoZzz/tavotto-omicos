@@ -3,7 +3,7 @@ import { setEngineTransport, type EngineTransport } from '@/lib/engineTransport'
 import type { PreviewMetadata } from '@/lib/previewBudget'
 import { EngineError } from '@/lib/api'
 import { msg } from '@/i18n'
-import { embeddedFileIdFor, seedEmbeddedSession } from '@/embedded/session'
+import { appendEmbeddedSession, embeddedFileIdFor, seedEmbeddedSession } from '@/embedded/session'
 import type { AppsBridge, ToolCallResult } from './appsBridge'
 
 /**
@@ -26,6 +26,7 @@ export interface OpenFigureResult {
   cost?: string
   manifest: Manifest
   svg: string | null
+  patches?: import('@/types/document').PanelOverride[]
   /** 这一版的预览表示法（ADR 0022）；老 server 不返回它。 */
   preview?: PreviewMetadata
   /** `preview.mode === 'raster'` 时**同一次响应**里带回的受控尺寸位图。 */
@@ -193,8 +194,29 @@ export function seedSession(open: OpenFigureResult): { panelId: string; fileId: 
   // 不记下来的话画布要等到用户改第一个值才有东西可显示。
   // 同一个 session id 重新打开时先丢掉旧图，避免矢量会话继承上一张 raster。
   rasterPngOf.delete(open.session_id)
-  rememberRasterPng(open.session_id, [], open.preview_png_base64)
+  rememberRasterPng(open.session_id, open.patches ?? [], open.preview_png_base64)
   return seedEmbeddedSession(
+    {
+      stem: open.stem,
+      project: open.project,
+      script: open.script,
+      cost: open.cost,
+      manifest: open.manifest,
+      svg: open.svg,
+      overrides: open.patches,
+      preview: open.preview,
+      renderRevision: open.render_revision,
+      warnings: open.warnings,
+    },
+    msg('history.mcpOpenFigure', undefined, 'workspace'),
+  )
+}
+
+/** Append one complete sibling session returned by the official batch-open path. */
+export function appendSession(open: OpenFigureResult): { panelId: string; fileId: string } {
+  sessionOf.set(fileIdFor(open.stem), open.session_id)
+  rememberRasterPng(open.session_id, open.patches ?? [], open.preview_png_base64)
+  return appendEmbeddedSession(
     {
       stem: open.stem,
       project: open.project,
@@ -205,6 +227,7 @@ export function seedSession(open: OpenFigureResult): { panelId: string; fileId: 
       preview: open.preview,
       renderRevision: open.render_revision,
       warnings: open.warnings,
+      overrides: open.patches,
     },
     msg('history.mcpOpenFigure', undefined, 'workspace'),
   )

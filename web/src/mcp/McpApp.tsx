@@ -5,7 +5,10 @@ import { Check, Download, Lightbulb, LoaderCircle, Redo2, Undo2, ShieldCheck, Sh
 import { ICON_SIZE } from '@/components/ui/Icon'
 import { Checkbox } from '@/components/ui/Checkbox'
 import { CanvasStage } from '@/canvas/CanvasStage'
+import { CanvasTabs } from '@/components/CanvasTabs'
 import { ElementInspector } from '@/components/inspector/ElementInspector'
+import { LeftPanel } from '@/components/left/LeftPanel'
+import { LeftRail } from '@/components/left/LeftRail'
 import { useEngineSync } from '@/hooks/useEngineSync'
 import { t as translate, type UiMessage } from '@/i18n'
 import { cn } from '@/lib/utils'
@@ -47,6 +50,7 @@ export function McpApp({
   const canRedo = useDocumentStore((s) => s.future.length > 0)
   const undo = useDocumentStore((s) => s.undo)
   const redo = useDocumentStore((s) => s.redo)
+  const leftOpen = useUiStore((s) => s.leftOpen)
 
   // usePanelRender 接受 null（面板还没到位时不该造一个假对象骗它）
   const render = usePanelRender(panel)
@@ -222,13 +226,22 @@ export function McpApp({
         </p>
       )}
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 bg-bg">
+        {/* MCP 画布仍然使用同一套 Tavotto 工作台侧栏：素材、画布、图层、图内
+            元素和问题面板都是真实 store / action，不是静态演示。MCP 会话没有
+            HTTP 项目端点，种子素材由 embedded/session.ts 注入，之后对图层的
+            选择、排序、隐藏和锁定继续走既有 documentStore。 */}
+        <LeftRail />
+        {leftOpen && <LeftPanel />}
         {/* CanvasStage 的根是 `flex-1`：**外面必须是 flex 容器**，否则它在普通
             block 父级里高度塌成 0，画布连同面板被 overflow-hidden 整块裁掉
             ——DOM 还在、getBoundingClientRect 还有值，只是既画不出来也点不中
             （e2e/mcp-canvas.spec.ts 的第一版就撞在这上面） */}
-        <div className="flex min-h-0 min-w-0 flex-1">
-          <CanvasStage />
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <CanvasTabs />
+          <div className="relative flex min-h-0 min-w-0 flex-1">
+            <CanvasStage />
+          </div>
         </div>
         <aside className="flex w-[304px] shrink-0 flex-col overflow-y-auto border-l border-border bg-surface">
           <ElementInspector panel={panel} />

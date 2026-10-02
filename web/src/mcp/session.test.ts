@@ -21,7 +21,7 @@ import { renderKey, useRenderStore } from '@/store/renderStore'
 import { useUiStore } from '@/store/uiStore'
 import type { PanelObject } from '@/types/document'
 import type { AppsBridge, ToolCallResult } from './appsBridge'
-import { installMcpTransport, seedSession, unwrap, type OpenFigureResult } from './session'
+import { appendSession, installMcpTransport, seedSession, unwrap, type OpenFigureResult } from './session'
 
 const manifest = (tickPt = 9): Manifest =>
   ({
@@ -137,6 +137,23 @@ describe('seedSession', () => {
 })
 
 describe('MCP 传输', () => {
+  it('批量打开的完整会话追加到同一份素材、图层和渲染 stores', () => {
+    seedSession(openResult())
+    const second = {
+      ...openResult(),
+      session_id: 's-def',
+      stem: 'FigN',
+      manifest: { ...manifest(), stem: 'FigN', size_mm: [40, 30] as [number, number] },
+    }
+    const { fileId, panelId } = appendSession(second)
+    const doc = useDocumentStore.getState().doc
+    expect(doc.objects).toHaveLength(2)
+    expect((doc.objects[1] as PanelObject).id).toBe(panelId)
+    expect((doc.objects[1] as PanelObject).fileId).toBe(fileId)
+    expect(useAssetStore.getState().panels.map((p) => p.id)).toEqual(['FigM.pdf', 'FigN.pdf'])
+    expect(useRenderStore.getState().latest[fileId]).toBe(renderKey(fileId, []))
+  })
+
   it('拖动 → setOverride → 走 tools/call 发全量 patches，manifest 用响应更新', async () => {
     const open = openResult()
     const { panelId, fileId } = seedSession(open)
