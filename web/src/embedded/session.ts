@@ -311,6 +311,78 @@ export function appendEmbeddedSession(
 }
 
 /**
+ * Register a figure returned while refreshing an already-open host project as
+ * a material only. Unlike appendEmbeddedSession this deliberately does not
+ * create a document panel, change the page size, or select the object. The
+ * user can insert it from the materials card when they choose.
+ */
+export function registerEmbeddedMaterial(fig: EmbeddedFigure): { fileId: string } {
+  const [wMm, hMm] = fig.manifest.size_mm
+  const fileId = embeddedFileIdFor(fig.stem)
+  const info: PanelInfo = {
+    id: fileId,
+    name: fig.stem,
+    folder: fig.project,
+    kind: 'pdf',
+    native_w_mm: wMm,
+    native_h_mm: hMm,
+    mtime: 0,
+    script: fig.script || undefined,
+    cost: fig.cost ?? 'medium',
+    preview_url: fig.previewPngBase64
+      ? `data:image/png;base64,${fig.previewPngBase64}`
+      : fig.svg
+        ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(fig.svg)}`
+        : null,
+  }
+  useAssetStore.setState((s) => ({
+    byId: { ...s.byId, [fileId]: info },
+    panels: s.panels.some((p) => p.id === fileId) ? s.panels : [...s.panels, info],
+    figuresDir: fig.project,
+    loaded: true,
+    loading: false,
+    error: null,
+  }))
+  const script = fig.script.trim()
+  if (script) {
+    useScriptLibraryStore.setState((s) => {
+      const view = s.view ?? { source: 'mcp-session', scripts: {}, candidates: [], conflicts: {}, all_scripts: [] }
+      const existing = view.scripts[script]
+      const current = view.all_scripts.find((entry) => entry.script === script)
+      return {
+        view: {
+          ...view,
+          scripts: {
+            ...view.scripts,
+            [script]: {
+              entry: existing?.entry ?? 'main',
+              cost: existing?.cost ?? fig.cost ?? 'medium',
+              notes: existing?.notes ?? '',
+              stems: Array.from(new Set([...(existing?.stems ?? []), fig.stem])),
+            },
+          },
+          all_scripts: [
+            ...view.all_scripts.filter((entry) => entry.script !== script),
+            {
+              script,
+              registered: true,
+              static_stems: Array.from(new Set([...(current?.static_stems ?? []), fig.stem])),
+              entry_candidates: current?.entry_candidates?.length ? current.entry_candidates : ['main'],
+              reason: 'registered',
+              can_probe: false,
+            },
+          ],
+        },
+        loaded: true,
+        loading: false,
+        error: null,
+      }
+    })
+  }
+  return { fileId }
+}
+
+/**
  * matplotlib 的 SVG 自带 pt 单位的 width/height，去掉后配合
  * preserveAspectRatio=none 才能精确铺满面板框。与 renderStore 里那份同源
  * ——种子数据也必须过同一道处理，否则第一帧与之后每一帧的尺寸口径不同。

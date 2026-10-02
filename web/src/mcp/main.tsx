@@ -8,6 +8,7 @@ import { McpApp } from './McpApp'
 import { McpProviders } from './McpProviders'
 import {
   appendSession,
+  appendImportedMaterial,
   installMcpTransport,
   seedBlankSession,
   seedSession,
@@ -145,7 +146,15 @@ function Boot() {
         result?: { structuredContent?: unknown; _meta?: Record<string, unknown> }
       }
       const result = envelope?.result ?? envelope
-      accept(result?.structuredContent ?? (result?._meta?.widgetData as unknown))
+      const payload = result?.structuredContent ?? (result?._meta?.widgetData as unknown)
+      const marker = payload && typeof payload === 'object'
+        ? (payload as { _omicosFigureStudioRefresh?: { project?: unknown; imported?: unknown } })._omicosFigureStudioRefresh
+        : undefined
+      if (marker && typeof marker.project === 'string' && marker.imported && typeof marker.imported === 'object') {
+        void appendImportedMaterial(bridge, marker.project, marker.imported as Parameters<typeof appendImportedMaterial>[2])
+        return
+      }
+      accept(payload)
     })
 
     void bridge.connect({ name: 'tavotto-canvas', version: '1' }).then((ok) => {

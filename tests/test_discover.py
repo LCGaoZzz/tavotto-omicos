@@ -127,6 +127,29 @@ def test_conflict_excluded_from_draft_and_reported(figs):
     assert "two.py" not in cfg["scripts"]  # 只剩冲突 stem → 整个不进草稿
 
 
+def test_managed_replay_sources_use_their_explicit_target_stem(figs):
+    """OmicOS copies one managed replay source per imported material.
+
+    The source body can contain a shared savefig template, so AST discovery
+    alone would make the two copies claim the same stems.  The managed target
+    marker is the authoritative per-material binding.
+    """
+    body = """# OmicOS managed figure source v1
+_omicos_replay_target_stem = {stem!r}
+
+def main():
+    fig.savefig("shared.png")
+"""
+    _script(figs, "asset-a.py", body.format(stem="A"))
+    _script(figs, "asset-b.py", body.format(stem="B"))
+    _touch(figs, "A.png", "B.png")
+
+    cfg, rep = discover.build_draft(figs)
+    assert rep["conflicts"] == {}
+    assert cfg["scripts"]["asset-a.py"]["stems"] == ["A"]
+    assert cfg["scripts"]["asset-b.py"]["stems"] == ["B"]
+
+
 def test_draft_loads_into_registry(figs):
     _script(figs, "fig_a.py", 'def main():\n    save(fig, "FigA_1")\n')
     cfg, _ = discover.build_draft(figs)

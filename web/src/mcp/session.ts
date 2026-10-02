@@ -3,7 +3,7 @@ import { setEngineTransport, type EngineTransport } from '@/lib/engineTransport'
 import type { PreviewMetadata } from '@/lib/previewBudget'
 import { EngineError } from '@/lib/api'
 import { msg } from '@/i18n'
-import { appendEmbeddedSession, embeddedFileIdFor, seedEmbeddedSession } from '@/embedded/session'
+import { appendEmbeddedSession, embeddedFileIdFor, registerEmbeddedMaterial, seedEmbeddedSession } from '@/embedded/session'
 import { emptyProject } from '@/types/document'
 import { newId } from '@/lib/id'
 import { useAssetStore } from '@/store/assetStore'
@@ -59,6 +59,11 @@ export interface BlankAssetPayload {
   mime?: string
   size?: number
   previewDataUrl?: string | null
+}
+
+export interface ImportedMaterialPayload extends BlankAssetPayload {
+  sourceStem?: string | null
+  sourceScript?: string | null
 }
 
 export interface PreflightIssuePayload {
@@ -304,4 +309,75 @@ export function appendSession(open: OpenFigureResult): { panelId: string; fileId
     },
     msg('history.mcpOpenFigure', undefined, 'workspace'),
   )
+}
+
+/** Add one host-imported file to the materials store without inserting it on
+ * the current page. A managed source is opened only to obtain its real
+ * manifest/preview and session id; `registerEmbeddedMaterial` intentionally
+ * leaves document objects and selection untouched. */
+export async function appendImportedMaterial(
+  bridge: AppsBridge,
+  project: string,
+  imported: ImportedMaterialPayload,
+): Promise<void> {
+  if (!imported.id) return
+  if (imported.sourceStem && project) {
+    try {
+      const opened = unwrap(await bridge.callTool('tavotto_open_figure', {
+        project_path: project,
+        stem: imported.sourceStem,
+      }))
+      if (
+        typeof opened.session_id === 'string' &&
+        typeof opened.project === 'string' &&
+        typeof opened.stem === 'string' &&
+        typeof opened.script === 'string' &&
+        !!opened.manifest &&
+        !!opened.profile
+      ) {
+        const figure = opened as unknown as OpenFigureResult
+        sessionOf.set(fileIdFor(figure.stem), figure.session_id)
+        rememberRasterPng(figure.session_id, figure.patches ?? [], figure.preview_png_base64)
+        registerEmbeddedMaterial({
+          stem: figure.stem,
+          project: figure.project,
+          script: figure.script,
+          cost: figure.cost,
+          manifest: figure.manifest,
+          svg: figure.svg,
+          preview: figure.preview,
+          renderRevision: figure.render_revision,
+          warnings: figure.warnings,
+          previewPngBase64: figure.preview_png_base64,
+          overrides: figure.patches,
+        })
+        return
+      }
+    } catch (error) {
+      console.warn('[tavotto] imported material source unavailable', error)
+    }
+  }
+
+  const mime = imported.mime?.toLowerCase() ?? ''
+  const fileId = imported.id
+  const info: PanelInfo = {
+    id: fileId,
+    name: imported.name,
+    folder: project,
+    kind: mime === 'application/pdf' || mime.includes('svg') ? 'pdf' : 'raster',
+    native_w_mm: 100,
+    native_h_mm: 75,
+    mtime: 0,
+    script: imported.sourceScript || undefined,
+    preview_url: imported.previewDataUrl ?? null,
+  }
+  useAssetStore.setState((s) => ({
+    byId: { ...s.byId, [fileId]: info },
+    panels: s.panels.some((p) => p.id === fileId) ? s.panels : [...s.panels, info],
+    figuresDir: project,
+    loaded: true,
+    loading: false,
+    error: null,
+  }))
+  if (info.preview_url) staticPreviewOf.set(fileId, info.preview_url)
 }
