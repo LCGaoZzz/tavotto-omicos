@@ -16,7 +16,8 @@ import { cn } from '@/lib/utils'
 import { useDocumentStore } from '@/store/documentStore'
 import { usePanelRender } from '@/store/renderStore'
 import { useUiStore } from '@/store/uiStore'
-import type { PanelObject } from '@/types/document'
+import type { CanvasObject, PanelObject } from '@/types/document'
+import { useAssetStore } from '@/store/assetStore'
 import type { AppsBridge } from './appsBridge'
 import { sessionIdFor, unwrap, type OpenFigureResult, type PreflightPayload } from './session'
 
@@ -46,6 +47,8 @@ export function McpApp({
   useEngineSync()
 
   const objects = useDocumentStore((s) => s.doc.objects)
+  const page = useDocumentStore((s) => s.doc.page)
+  const assets = useAssetStore((s) => s.byId)
   const panel = objects.find((o): o is PanelObject => o.id === panelId && o.type === 'panel')
   const canUndo = useDocumentStore((s) => s.past.length > 0)
   const canRedo = useDocumentStore((s) => s.future.length > 0)
@@ -76,6 +79,9 @@ export function McpApp({
   const [busy, setBusy] = useState<'preflight' | 'export' | null>(null)
   const [notice, setNotice] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
   const [confirmForced, setConfirmForced] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exportFormats, setExportFormats] = useState<string[]>(['pdf', 'png'])
+  const [exportDpi, setExportDpi] = useState('600')
   const sessionId = open.blank ? '' : (sessionIdFor(open.stem + '.pdf') ?? open.session_id)
 
   // 改过图之后旧的预检结论就不作数了——**标成过期而不是留着**，
@@ -107,17 +113,32 @@ export function McpApp({
   }, [bridge, sessionId, open.blank])
 
   const runExport = useCallback(
-    async (formats: string[]) => {
-      if (open.blank) return
+    async (formats: string[], dpi = 600) => {
+      if (open.blank && objects.length === 0) return
       setBusy('export')
       setNotice(null)
       try {
+        const canvasObjects = objects.map((object) => canvasExportObject(object, assets))
+        const request = open.blank
+          ? {
+              scope: 'canvas',
+              page_w_mm: page.w,
+              page_h_mm: page.h,
+              objects: canvasObjects,
+              formats,
+              dpi,
+              stem: 'Figure_1',
+              out_dir: `${open.project}/exports`,
+              transparent: !!page.transparent,
+            }
+          : {
+              session_id: sessionId,
+              formats,
+              dpi,
+              explicit_confirm: confirmForced,
+            }
         const body = unwrap(
-          await bridge.callTool('tavotto_export', {
-            session_id: sessionId,
-            formats,
-            explicit_confirm: confirmForced,
-          }),
+          await bridge.callTool('tavotto_export', request),
         )
         const files = (body.files as { path: string }[]) ?? []
         setPreflight((body.preflight as PreflightPayload) ?? preflight)
@@ -132,7 +153,7 @@ export function McpApp({
         setBusy(null)
       }
     },
-    [bridge, sessionId, confirmForced, open.stem, preflight, open.blank],
+    [bridge, sessionId, confirmForced, open.stem, open.project, preflight, open.blank, objects, assets, page],
   )
 
   // 手势结束后画布尺寸可能变了：告诉 host 一声（inline 模式下它据此调高度）
@@ -181,7 +202,7 @@ export function McpApp({
         />
         <button
           className="flex h-7 shrink-0 items-center gap-1.5 rounded-sm bg-ink px-2.5 text-xs text-white disabled:opacity-40"
-          disabled={open.blank || busy != null || pending || (needsConfirm && !confirmForced)}
+          disabled={(open.blank && objects.length === 0) || busy != null || pending || (needsConfirm && !confirmForced)}
           title={
             pending
               ? mc('exportPendingTitle')
@@ -189,10 +210,10 @@ export function McpApp({
                 ? mc('exportBlockedTitle')
                 : undefined
           }
-          onClick={() => void runExport(['pdf', 'png'])}
+          onClick={() => setExportOpen(true)}
         >
           {busy === 'export' ? <LoaderCircle size={ICON_SIZE.sm} className="animate-spin" /> : <Download size={ICON_SIZE.sm} />}
-          {mc('exportBoth')}
+          导出
         </button>
       </header>
 
@@ -230,9 +251,24 @@ export function McpApp({
         <p className="shrink-0 border-b border-border bg-surface-2 px-3 py-1.5 text-xs text-ink-2">
           {translate('mcp.blankCanvasHint', {
             ns: 'dialogs',
-            defaultValue: '这是一个空白 Tavotto 画布。请从素材栏添加图形；导入真实图形后即可预检和导出。',
+            defaultValue: '这是一个空白 Tavotto 画布。请从素材栏添加图形；添加对象后即可导出。',
           })}
       </p>
+      )}
+
+      {exportOpen && (
+        <ExportPanel
+          formats={exportFormats}
+          dpi={exportDpi}
+          busy={busy === 'export'}
+          onToggle={(format) => setExportFormats((current) => current.includes(format) ? current.filter((item) => item !== format) : [...current, format])}
+          onDpi={setExportDpi}
+          onCancel={() => setExportOpen(false)}
+          onExport={() => {
+            setExportOpen(false)
+            void runExport(exportFormats.length ? exportFormats : ['pdf', 'png'], Number(exportDpi))
+          }}
+        />
       )}
 
       <div className="relative flex min-h-0 flex-1 bg-bg">
@@ -255,6 +291,74 @@ export function McpApp({
         {rightOpen && <Inspector />}
       </div>
       <CommandPalette />
+    </div>
+  )
+}
+
+function canvasExportObject(object: CanvasObject, assets: Record<string, import('@/lib/api').PanelInfo>): Record<string, unknown> {
+  const base = { type: object.type, x_mm: object.x, y_mm: object.y, w_mm: object.w, h_mm: object.h, rotation_deg: object.rotationDeg ?? 0 }
+  if (object.type === 'panel') {
+    const asset = assets[object.fileId]
+    return {
+      ...base,
+      id: object.fileId,
+      source_path: asset?.source_path,
+      rotation: object.rotation ?? 0,
+      crop: object.crop,
+      opacity: object.opacity,
+      flip_h: object.flipH,
+      flip_v: object.flipV,
+    }
+  }
+  if (object.type === 'text') {
+    return { ...base, text: object.text, size_pt: object.sizePt, font_family: object.fontFamily, interpretation: object.interpretation, bold: object.bold, italic: object.italic, color: object.color, align: object.align, underline: object.underline, line_height: object.lineHeight, padding_mm: object.padding, bg: object.bg, border_color: object.borderColor, border_pt: object.borderPt }
+  }
+  if (object.type === 'arrow') {
+    return { ...base, start: object.start, end: object.end, stroke_pt: object.strokePt, color: object.color, head: object.head, head_start: object.headStart, head_end: object.headEnd, dash: object.dash }
+  }
+  return { ...base, shape: object.shape, stroke_pt: object.strokePt, color: object.color, fill: object.fill, dash: object.dash, start: object.start, end: object.end, sides: object.sides, corner_radius_mm: object.cornerRadius }
+}
+
+function ExportPanel({
+  formats,
+  dpi,
+  busy,
+  onToggle,
+  onDpi,
+  onCancel,
+  onExport,
+}: {
+  formats: string[]
+  dpi: string
+  busy: boolean
+  onToggle: (format: string) => void
+  onDpi: (dpi: string) => void
+  onCancel: () => void
+  onExport: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" role="dialog" aria-label="导出">
+      <div className="w-80 rounded-md border border-border bg-surface p-4 shadow-xl">
+        <h2 className="mb-3 text-sm font-semibold">导出当前画布</h2>
+        <div className="mb-3 flex flex-col gap-2 text-xs">
+          {['pdf', 'png', 'tiff'].map((format) => (
+            <label key={format} className="flex items-center gap-2">
+              <input type="checkbox" checked={formats.includes(format)} onChange={() => onToggle(format)} />
+              <span>{format.toUpperCase()}</span>
+            </label>
+          ))}
+        </div>
+        <label className="mb-4 flex items-center justify-between text-xs">
+          <span>位图 DPI</span>
+          <select className="rounded border border-border bg-bg px-2 py-1" value={dpi} onChange={(event) => onDpi(event.target.value)}>
+            {['300', '600', '900', '1200'].map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>
+        <div className="flex justify-end gap-2">
+          <button className="rounded border border-border px-3 py-1 text-xs" onClick={onCancel}>取消</button>
+          <button className="rounded bg-ink px-3 py-1 text-xs text-white disabled:opacity-40" disabled={busy || formats.length === 0} onClick={onExport}>导出</button>
+        </div>
+      </div>
     </div>
   )
 }

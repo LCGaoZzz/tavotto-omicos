@@ -303,6 +303,11 @@ def _tools() -> list[dict]:
                 "type": "object",
                 "properties": {
                     "session_id": {"type": "string"},
+                    "scope": {"type": "string", "enum": ["original", "canvas"], "description": "导出原图会话或当前 Tavotto 画布"},
+                    "page_w_mm": {"type": "number"},
+                    "page_h_mm": {"type": "number"},
+                    "objects": {"type": "array", "items": {"type": "object"}},
+                    "transparent": {"type": "boolean"},
                     "formats": {
                         "type": "array",
                         "items": {"type": "string", "enum": list(bridge.EXPORT_FORMATS)},
@@ -321,7 +326,7 @@ def _tools() -> list[dict]:
                     },
                     "proof": {"type": "boolean", "description": "写 proof report，默认 true"},
                 },
-                "required": ["session_id"],
+                "required": [],
                 "additionalProperties": False,
             },
         },
@@ -678,6 +683,19 @@ def _call_export(args: dict) -> dict:
     # dpi **不能写成 `or 600`**：显式给的 0 是写错了，不是「没给」，
     # 悄悄替它换成 600 会让用户以为自己的参数生效了
     raw_dpi = args.get("dpi")
+    if args.get("scope") == "canvas":
+        out = bridge.export_canvas(
+            args.get("objects") or [],
+            page_w_mm=args.get("page_w_mm") or 150,
+            page_h_mm=args.get("page_h_mm") or 100,
+            formats=args.get("formats") or [],
+            dpi=600 if raw_dpi is None else raw_dpi,
+            stem=args.get("stem") or "Figure_1",
+            out_dir=args.get("out_dir"),
+            transparent=bool(args.get("transparent")),
+        )
+        paths = [f["path"] for f in out.get("files", []) if f.get("status") == "done"]
+        return {"content": _text("已导出：" + "、".join(paths)), "structuredContent": out}
     out = bridge.export(
         str(args.get("session_id") or ""),
         formats=args.get("formats") or [],

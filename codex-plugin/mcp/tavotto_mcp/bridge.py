@@ -52,6 +52,7 @@ from tavotto.engine import (
     registry as engine_registry,
     telemetry as engine_telemetry,
 )
+from tavotto import pdfbackend
 
 from .roots import (
     CODE_AMBIGUOUS_ROOT,
@@ -1574,6 +1575,66 @@ def _normalized_status(session: Session) -> dict | None:
         "reason": None if current else "state_changed",
         "verified_patch_hash": n.get("patch_hash"),
     }
+
+
+def export_canvas(
+    objects: list[dict],
+    *,
+    page_w_mm: float,
+    page_h_mm: float,
+    formats: list[str],
+    dpi: int = 600,
+    out_dir: str | None = None,
+    stem: str = "Figure_1",
+    transparent: bool = False,
+) -> dict:
+    """Export the live Figure 1 composition through Tavotto's native canvas
+    backend.  This is deliberately a sibling of ``export`` rather than a UI
+    screenshot: panel placement, text, arrows and shapes are resolved by the
+    same ``pdfbackend.compose`` implementation used by Tavotto's desktop
+    canvas exporter, and every format is produced from one page instance.
+    """
+    try:
+        dpi = int(dpi)
+    except (TypeError, ValueError):
+        raise BridgeError(f"dpi 必须是整数: {dpi!r}", code="bad_dpi") from None
+    if dpi <= 0 or dpi > 1200:
+        raise BridgeError(f"dpi 超出范围: {dpi}", code="bad_dpi")
+    fmts = [str(f).lower().strip() for f in formats if str(f).strip()]
+    allowed = {"pdf", "png", "tiff"}
+    bad = [f for f in fmts if f not in allowed]
+    if bad:
+        raise BridgeError("画布导出不支持: " + ", ".join(bad), code="bad_format")
+    if not fmts:
+        fmts = ["pdf", "png"]
+    target = Path(check_scope(out_dir or str(engine_config.project_export_dir(str(stem)))))
+    target.mkdir(parents=True, exist_ok=True)
+    safe_stem = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in stem).strip("._") or "Figure_1"
+    canvas = pdfbackend.compose(float(page_w_mm), float(page_h_mm), bool(transparent))
+    try:
+        def resolve(obj: dict, _out_dpi: int) -> Path:
+            raw = obj.get("source_path") or obj.get("id")
+            if not isinstance(raw, str) or not raw:
+                raise BridgeError("画布面板缺少素材路径", code="source_missing")
+            return Path(check_scope(raw))
+        for obj in objects:
+            if not isinstance(obj, dict) or obj.get("hidden"):
+                continue
+            canvas.place(obj, dpi, resolve)
+        stamp = time.strftime("%Y%m%d_%H%M%S")
+        files = []
+        for fmt in fmts:
+            path = target / f"{safe_stem}_{stamp}.{fmt}"
+            if fmt == "pdf":
+                canvas.save_pdf(path)
+            elif fmt == "png":
+                canvas.save_png(path, dpi)
+            else:
+                canvas.save_tiff(path, dpi)
+            files.append({"format": fmt, "path": str(path), "status": "done"})
+    finally:
+        canvas.close()
+    return {"ok": True, "scope": "canvas", "files": files, "export_dir": str(target), "dpi": dpi}
 
 
 def _normalize_proof_section(

@@ -57,7 +57,15 @@ import { ScriptLibrary } from './ScriptLibrary'
 
 /** 面板文件名（带扩展名）：同 stem 的 PDF / PNG 靠它区分 */
 const fileName = (id: string) => id.split('/').pop() ?? id
-const formatOf = (p: PanelInfo) => (p.kind === 'pdf' ? 'PDF' : 'PNG')
+const panelName = (p: PanelInfo) => p.name || fileName(p.id)
+const formatOf = (p: PanelInfo) => {
+  if (p.kind === 'pdf') return 'PDF'
+  const mime = p.mime?.toLowerCase() ?? ''
+  if (mime.startsWith('image/')) return (mime.split('/')[1] || 'image').toUpperCase()
+  const ext = panelName(p).split('.').pop()
+  return ext ? ext.toUpperCase() : '素材'
+}
+const isVisualAsset = (p: PanelInfo) => p.kind === 'pdf' || p.mime?.startsWith('image/') || p.mime?.includes('svg')
 
 type TypeFilter = AssetTypeFilter
 type SortKey = AssetSortKey
@@ -183,7 +191,7 @@ export function AssetBrowser() {
       list.sort(
         (a, b) =>
           Number(!!b.script) - Number(!!a.script) ||
-          fileName(a.id).localeCompare(fileName(b.id)),
+          panelName(a).localeCompare(panelName(b)),
       )
     else if (sort === 'recent')
       list.sort((a, b) => (recentlyUsed[b.id] ?? 0) - (recentlyUsed[a.id] ?? 0))
@@ -505,7 +513,7 @@ export function AssetBrowser() {
       <Dialog
         open={!!zoomed}
         onOpenChange={(v) => !v && setZoomed(null)}
-        title={zoomed ? (zoomed.kind === 'file' ? fileName(zoomed.panel.id) : zoomed.kind === 'runtime' ? zoomed.asset.stem : '') : ''}
+        title={zoomed ? (zoomed.kind === 'file' ? panelName(zoomed.panel) : zoomed.kind === 'runtime' ? zoomed.asset.stem : '') : ''}
         description={
           zoomed?.kind === 'file'
             ? `${formatOf(zoomed.panel)} · ${translate('measure.cmSize', { w: formatCm(zoomed.panel.native_w_mm), h: formatCm(zoomed.panel.native_h_mm) })}`
@@ -534,12 +542,12 @@ export function AssetBrowser() {
         {/* 白弹窗里不再给图套一个框：白上白无需边（宪法第八节；左栏审计 L39） */}
         {zoomed?.kind === 'file' && (
           <div className="flex items-center justify-center bg-white p-2">
-            {zoomed.panel.preview_url === null ? (
-              <div className="flex h-40 w-full items-center justify-center text-sm text-ink-3">—</div>
+            {zoomed.panel.preview_url === null || !isVisualAsset(zoomed.panel) ? (
+              <div className="flex h-40 w-full items-center justify-center text-sm text-ink-3">{formatOf(zoomed.panel)}</div>
             ) : (
               <img
                 src={zoomed.panel.preview_url ?? renderUrl(zoomed.panel.id, 800, zoomed.panel.mtime)}
-                alt={ab('zoomAlt', { name: fileName(zoomed.panel.id) })}
+                alt={ab('zoomAlt', { name: panelName(zoomed.panel) })}
                 className="max-h-[56vh] max-w-full object-contain"
               />
             )}
@@ -745,7 +753,7 @@ function AssetCard({
   columns: number
 }) {
   useTranslation('workspace')
-  const name = fileName(panel.id)
+  const name = panelName(panel)
   const cap = panel.capability
   const label = [
     name,
@@ -804,9 +812,9 @@ function AssetCard({
       style={{ contentVisibility: 'auto', containIntrinsicSize: '140px' }}
     >
       <CardPreview>
-        {panel.preview_url === null ? (
+        {panel.preview_url === null || !isVisualAsset(panel) ? (
           <div className="flex h-full w-full items-center justify-center bg-surface-2 p-2 text-center text-xs text-ink-3">
-            —
+            {formatOf(panel)}
           </div>
         ) : (
           <img
@@ -934,7 +942,7 @@ function RuntimeAssetCard({
     asset.size_mm
       ? ab('cardSize', { w: formatCm(asset.size_mm[0]), h: formatCm(asset.size_mm[1]) })
       : ab('runtimeNeedsRun'),
-    sibling ? ab('runtimeSiblingOf', { name: fileName(sibling.id) }) : null,
+    sibling ? ab('runtimeSiblingOf', { name: panelName(sibling) }) : null,
     staleKey ? translate(`panelBadge.${staleKey}`, { ns: 'workspace' }) : null,
     used ? ab('cardUsed', { count: used }) : null,
   ]
@@ -1034,7 +1042,7 @@ function RuntimeAssetCard({
         parts={[
           ab('runtimeBadge'),
           sibling
-            ? ab('runtimeSiblingOf', { name: fileName(sibling.id) })
+            ? ab('runtimeSiblingOf', { name: panelName(sibling) })
             : asset.size_mm
               ? translate('measure.cmSize', {
                   w: formatCm(asset.size_mm[0]),
@@ -1221,7 +1229,7 @@ function SelectedAssetActions({ item }: { item: LibraryItem | undefined }) {
     item?.kind === 'runtime' ? s.byScript[item.asset.script] : undefined,
   )
   if (!item) return null
-  const name = item.kind === 'file' ? fileName(item.panel.id) : item.asset.stem
+  const name = item.kind === 'file' ? panelName(item.panel) : item.asset.stem
   const actionable = item.kind === 'file' || !!item.asset.descriptor
   const busy = !!run && isBusyPhase(run.phase)
   return (
@@ -1299,7 +1307,7 @@ function AssetCapabilityNotice({ panel }: { panel?: PanelInfo }) {
       className="shrink-0 border-t border-border bg-surface-2 px-1.5 py-1"
     >
       <p className="truncate px-1.5 text-xs text-ink" title={panel.id}>
-        {ab('capabilityHeading', { name: fileName(panel.id), status: statusLabel(cap.status) })}
+        {ab('capabilityHeading', { name: panelName(panel), status: statusLabel(cap.status) })}
       </p>
       <p className="mt-0.5 px-1.5 text-xs leading-relaxed text-ink-2">{reasonText(cap)}</p>
       <Button

@@ -3,7 +3,7 @@ import { setEngineTransport, type EngineTransport } from '@/lib/engineTransport'
 import type { PreviewMetadata } from '@/lib/previewBudget'
 import { EngineError } from '@/lib/api'
 import { msg } from '@/i18n'
-import { appendEmbeddedSession, embeddedFileIdFor, registerEmbeddedMaterial, seedEmbeddedSession } from '@/embedded/session'
+import { appendEmbeddedSession, embeddedFileIdFor, seedEmbeddedSession } from '@/embedded/session'
 import { emptyProject } from '@/types/document'
 import { newId } from '@/lib/id'
 import { useAssetStore } from '@/store/assetStore'
@@ -59,6 +59,9 @@ export interface BlankAssetPayload {
   mime?: string
   size?: number
   previewDataUrl?: string | null
+  sourceKind?: string | null
+  sourceStem?: string | null
+  sourceScript?: string | null
 }
 
 export interface ImportedMaterialPayload extends BlankAssetPayload {
@@ -96,6 +99,9 @@ const sessionOf = new Map<string, string>()
 /** Static image assets imported into a blank host project can render directly
  * from the host-provided data URL; they do not need an engine session. */
 const staticPreviewOf = new Map<string, string>()
+/** Managed source metadata is kept dormant until the user adds that material
+ * to Figure 1. Importing a file must never execute or render it implicitly. */
+const pendingSourceOf = new Map<string, { project: string; stem: string }>()
 
 /**
  * raster 档下最近一次渲染带回来的位图（ADR 0022）。
@@ -138,14 +144,20 @@ export async function seedBlankSession(open: OpenFigureResult): Promise<{ panelI
   useRuntimeAssetStore.getState().clear()
   useRuntimeAssetStore.setState({ assets: [], assetsLoading: false, assetsError: null })
   useScriptLibraryStore.getState().clear()
-  // No HTTP server exists inside an MCP iframe. An empty project has an empty
-  // registry, not an offline registry; do not trigger ScriptLibrary's fetch.
+  // No HTTP server exists inside an MCP iframe. Build the project-local script
+  // list from host metadata instead of fetching the unrelated global registry.
+  const scriptAssets = (open.assets ?? []).filter((asset) => (asset.mime ?? '').toLowerCase().includes('python') || asset.sourceKind === 'python')
   useScriptLibraryStore.setState({
-    view: { source: 'mcp-session', scripts: {}, candidates: [], conflicts: {}, all_scripts: [] },
+    view: {
+      source: 'mcp-session',
+      scripts: Object.fromEntries(scriptAssets.map((asset) => [asset.sourceScript || asset.relativePath || asset.name, { entry: 'main', cost: 'medium', notes: '', stems: asset.sourceStem ? [asset.sourceStem] : [] }])),
+      candidates: [], conflicts: {},
+      all_scripts: scriptAssets.map((asset) => ({ script: asset.sourceScript || asset.relativePath || asset.name, registered: true, static_stems: asset.sourceStem ? [asset.sourceStem] : [], entry_candidates: ['main'], reason: 'registered' as const, can_probe: false })),
+    },
     loaded: true, loading: false, error: null,
   })
 
-  const panels: PanelInfo[] = (open.assets ?? []).map((asset) => {
+  const panels: PanelInfo[] = (open.assets ?? []).filter((asset) => !(asset.mime ?? '').toLowerCase().includes('python') && asset.sourceKind !== 'python').map((asset) => {
     const mime = asset.mime?.toLowerCase() ?? ''
     const kind: PanelInfo['kind'] = mime === 'application/pdf' || mime.includes('svg') ? 'pdf' : 'raster'
     return {
@@ -153,12 +165,18 @@ export async function seedBlankSession(open: OpenFigureResult): Promise<{ panelI
       name: asset.name,
       folder: open.project,
       kind,
+      source_path: asset.relativePath ? `${open.project}/${asset.relativePath}` : undefined,
+      mime: asset.mime,
       native_w_mm: 100,
       native_h_mm: 75,
       mtime: 0,
       preview_url: asset.previewDataUrl ?? null,
     }
   })
+  pendingSourceOf.clear()
+  for (const asset of open.assets ?? []) {
+    if (asset.sourceStem && open.project) pendingSourceOf.set(asset.id, { project: open.project, stem: asset.sourceStem })
+  }
   staticPreviewOf.clear()
   for (const panel of panels) {
     if (panel.preview_url) staticPreviewOf.set(panel.id, panel.preview_url)
@@ -214,7 +232,23 @@ export function unwrap(res: ToolCallResult): Record<string, unknown> {
 export function installMcpTransport(bridge: AppsBridge): () => void {
   const transport: EngineTransport = {
     async render(id, patches, opts) {
-      const sid = sessionIdFor(id)
+      let sid = sessionIdFor(id)
+      // A managed .py is an editable material, not an automatic canvas seed.
+      // Open it only when the user actually adds it to the composition and the
+      // normal render path first needs a Tavotto session.
+      if (!sid) {
+        const source = pendingSourceOf.get(id)
+        if (source) {
+          const opened = unwrap(await bridge.callTool('tavotto_open_figure', {
+            project_path: source.project,
+            stem: source.stem,
+          }, undefined, opts?.signal)) as unknown as OpenFigureResult
+          if (typeof opened.session_id !== 'string') throw new EngineError('Tavotto 未返回可编辑会话', '', 'open_failed', '')
+          sid = opened.session_id
+          sessionOf.set(id, sid)
+          rememberRasterPng(sid, patches, opened.preview_png_base64)
+        }
+      }
       if (!sid) throw new EngineError(`没有这个面板的 MCP 会话: ${id}`, '', 'no_session', '')
       // signal 必须转下去：renderStore 的看门狗（按脚本 cost 分 2/5/15 分钟）
       // 就靠它取消，丢掉的话内嵌画布里一次卡死的渲染永远转下去
@@ -312,52 +346,14 @@ export function appendSession(open: OpenFigureResult): { panelId: string; fileId
 }
 
 /** Add one host-imported file to the materials store without inserting it on
- * the current page. A managed source is opened only to obtain its real
- * manifest/preview and session id; `registerEmbeddedMaterial` intentionally
- * leaves document objects and selection untouched. */
+ * the current page. A managed source remains dormant until the user adds it
+ * to Figure 1, at which point the normal render path opens its session. */
 export async function appendImportedMaterial(
-  bridge: AppsBridge,
+  _bridge: AppsBridge,
   project: string,
   imported: ImportedMaterialPayload,
 ): Promise<void> {
   if (!imported.id) return
-  if (imported.sourceStem && project) {
-    try {
-      const opened = unwrap(await bridge.callTool('tavotto_open_figure', {
-        project_path: project,
-        stem: imported.sourceStem,
-      }))
-      if (
-        typeof opened.session_id === 'string' &&
-        typeof opened.project === 'string' &&
-        typeof opened.stem === 'string' &&
-        typeof opened.script === 'string' &&
-        !!opened.manifest &&
-        !!opened.profile
-      ) {
-        const figure = opened as unknown as OpenFigureResult
-        sessionOf.set(fileIdFor(figure.stem), figure.session_id)
-        rememberRasterPng(figure.session_id, figure.patches ?? [], figure.preview_png_base64)
-        registerEmbeddedMaterial({
-          stem: figure.stem,
-          project: figure.project,
-          script: figure.script,
-          cost: figure.cost,
-          manifest: figure.manifest,
-          svg: figure.svg,
-          preview: figure.preview,
-          renderRevision: figure.render_revision,
-          warnings: figure.warnings,
-          previewPngBase64: figure.preview_png_base64,
-          overrides: figure.patches,
-        })
-        return
-      }
-    } catch (error) {
-      console.warn('[tavotto] imported material source unavailable', error)
-    }
-  }
-
   const mime = imported.mime?.toLowerCase() ?? ''
   const fileId = imported.id
   const info: PanelInfo = {
@@ -365,6 +361,8 @@ export async function appendImportedMaterial(
     name: imported.name,
     folder: project,
     kind: mime === 'application/pdf' || mime.includes('svg') ? 'pdf' : 'raster',
+    source_path: imported.relativePath ? `${project}/${imported.relativePath}` : undefined,
+    mime: imported.mime,
     native_w_mm: 100,
     native_h_mm: 75,
     mtime: 0,
@@ -380,4 +378,5 @@ export async function appendImportedMaterial(
     error: null,
   }))
   if (info.preview_url) staticPreviewOf.set(fileId, info.preview_url)
+  if (imported.sourceStem && project) pendingSourceOf.set(fileId, { project, stem: imported.sourceStem })
 }

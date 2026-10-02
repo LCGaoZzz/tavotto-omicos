@@ -10,6 +10,10 @@ export interface PanelInfo {
   name: string
   folder: string
   kind: 'pdf' | 'raster'
+  /** Absolute source path used only by the MCP canvas exporter. */
+  source_path?: string
+  /** Original MIME type, when the host can provide it. */
+  mime?: string
   native_w_mm: number
   native_h_mm: number
   px_w?: number
