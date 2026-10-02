@@ -4,6 +4,15 @@ import type { PreviewMetadata } from '@/lib/previewBudget'
 import { EngineError } from '@/lib/api'
 import { msg } from '@/i18n'
 import { appendEmbeddedSession, embeddedFileIdFor, seedEmbeddedSession } from '@/embedded/session'
+import { emptyProject } from '@/types/document'
+import { newId } from '@/lib/id'
+import { useAssetStore } from '@/store/assetStore'
+import { useRuntimeAssetStore } from '@/store/runtimeAssetStore'
+import { useScriptLibraryStore } from '@/store/scriptLibraryStore'
+import { useDocumentStore } from '@/store/documentStore'
+import { useRenderStore } from '@/store/renderStore'
+import { useUiStore } from '@/store/uiStore'
+import type { PanelInfo } from '@/lib/api'
 import type { AppsBridge, ToolCallResult } from './appsBridge'
 
 /**
@@ -37,6 +46,19 @@ export interface OpenFigureResult {
   registry?: { parameterizable?: boolean | null; conflicts?: string[]; stems?: string[] }
   profile: { profile_id: string; profile_version: string; label?: string }
   preflight?: PreflightPayload
+  /** Host-created project with no source/package yet.  This uses Tavotto's
+   * native empty document model and intentionally has no engine session. */
+  blank?: boolean
+  assets?: BlankAssetPayload[]
+}
+
+export interface BlankAssetPayload {
+  id: string
+  name: string
+  relativePath?: string
+  mime?: string
+  size?: number
+  previewDataUrl?: string | null
 }
 
 export interface PreflightIssuePayload {
@@ -66,6 +88,9 @@ export interface PreflightPayload {
 
 /** 面板 id ↔ MCP 会话。一个 widget 目前只端一张图，留表是为了以后多图拼版。 */
 const sessionOf = new Map<string, string>()
+/** Static image assets imported into a blank host project can render directly
+ * from the host-provided data URL; they do not need an engine session. */
+const staticPreviewOf = new Map<string, string>()
 
 /**
  * raster 档下最近一次渲染带回来的位图（ADR 0022）。
@@ -101,6 +126,45 @@ function rememberRasterPng(sessionId: string, patches: unknown[], base64: unknow
 }
 
 export const fileIdFor = embeddedFileIdFor
+
+/** Seed a newly-created host project with Tavotto's own empty document. */
+export async function seedBlankSession(open: OpenFigureResult): Promise<{ panelId: null }> {
+  await useDocumentStore.getState().switchDocument(emptyProject(), newId('mcp-blank'))
+  useRuntimeAssetStore.getState().clear()
+  useRuntimeAssetStore.setState({ assets: [], assetsLoading: false, assetsError: null })
+  useScriptLibraryStore.getState().clear()
+
+  const panels: PanelInfo[] = (open.assets ?? []).map((asset) => {
+    const mime = asset.mime?.toLowerCase() ?? ''
+    const kind: PanelInfo['kind'] = mime === 'application/pdf' || mime.includes('svg') ? 'pdf' : 'raster'
+    return {
+      id: asset.id,
+      name: asset.name,
+      folder: open.project,
+      kind,
+      native_w_mm: 100,
+      native_h_mm: 75,
+      mtime: 0,
+      preview_url: asset.previewDataUrl ?? null,
+    }
+  })
+  staticPreviewOf.clear()
+  for (const panel of panels) {
+    if (panel.preview_url) staticPreviewOf.set(panel.id, panel.preview_url)
+  }
+  useAssetStore.setState({
+    byId: Object.fromEntries(panels.map((panel) => [panel.id, panel])),
+    panels,
+    figuresDir: open.project,
+    loaded: true,
+    loading: false,
+    error: null,
+  })
+  useRenderStore.setState({ byKey: {}, tracked: {}, latest: {}, building: {} })
+  useUiStore.getState().setElementPanel(null)
+  useUiStore.getState().setLeftTab('assets')
+  return { panelId: null }
+}
 
 export function sessionIdFor(fileId: string): string | null {
   return sessionOf.get(fileId) ?? null
@@ -177,7 +241,7 @@ export function installMcpTransport(bridge: AppsBridge): () => void {
         'MCP 画布这一版没有位图预览（矢量图显示走引擎 SVG）', '', 'not_supported', '')
     },
     // iframe 里没有可寻址的 HTTP 资源：回 null，PanelView 退回 SVG 显示。
-    panelSrc: () => null,
+    panelSrc: (id) => staticPreviewOf.get(id) ?? null,
   }
   return setEngineTransport(transport)
 }
@@ -189,6 +253,7 @@ export function installMcpTransport(bridge: AppsBridge): () => void {
  * 不许各自复制然后漂移）；MCP 特有的只有「fileId ↔ session_id」这张表。
  */
 export function seedSession(open: OpenFigureResult): { panelId: string; fileId: string } {
+  staticPreviewOf.clear()
   sessionOf.set(fileIdFor(open.stem), open.session_id)
   // 打开就是 raster 的图（#181 那一类）：第一帧的位图也在这次响应里。
   // 不记下来的话画布要等到用户改第一个值才有东西可显示。
@@ -207,6 +272,7 @@ export function seedSession(open: OpenFigureResult): { panelId: string; fileId: 
       preview: open.preview,
       renderRevision: open.render_revision,
       warnings: open.warnings,
+      previewPngBase64: open.preview_png_base64,
     },
     msg('history.mcpOpenFigure', undefined, 'workspace'),
   )
@@ -227,6 +293,7 @@ export function appendSession(open: OpenFigureResult): { panelId: string; fileId
       preview: open.preview,
       renderRevision: open.render_revision,
       warnings: open.warnings,
+      previewPngBase64: open.preview_png_base64,
       overrides: open.patches,
     },
     msg('history.mcpOpenFigure', undefined, 'workspace'),

@@ -35,6 +35,8 @@ export interface EmbeddedFigure {
   cost?: string
   manifest: Manifest
   svg: string | null
+  /** First-frame raster returned in the same MCP response, when selected. */
+  previewPngBase64?: string
   /**
    * 这一版的预览表示法（ADR 0022）。缺省按 `vector` 解读；`svg` 为 null 而
    * 引擎给出 `raster` 时，画布走位图显示——**编辑语义一个字都不变**。
@@ -65,6 +67,11 @@ export function seedEmbeddedSession(
     mtime: 0,
     script: fig.script,
     cost: fig.cost ?? 'medium',
+    preview_url: fig.previewPngBase64
+      ? `data:image/png;base64,${fig.previewPngBase64}`
+      : fig.svg
+        ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(fig.svg)}`
+        : null,
   }
   useAssetStore.setState({
     byId: { [fileId]: info },
@@ -188,6 +195,11 @@ export function appendEmbeddedSession(
     mtime: 0,
     script: fig.script || undefined,
     cost: fig.cost ?? 'medium',
+    preview_url: fig.previewPngBase64
+      ? `data:image/png;base64,${fig.previewPngBase64}`
+      : fig.svg
+        ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(fig.svg)}`
+        : null,
   }
   useAssetStore.setState((s) => ({
     byId: { ...s.byId, [fileId]: info },

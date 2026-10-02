@@ -9,6 +9,7 @@ import { McpProviders } from './McpProviders'
 import {
   appendSession,
   installMcpTransport,
+  seedBlankSession,
   seedSession,
   type OpenFigureResult,
   unwrap,
@@ -80,6 +81,9 @@ async function hydrateSiblingSessions(open: OpenFigureResult): Promise<void> {
 function isOpenResult(v: unknown): v is OpenFigureResult {
   const o = v as OpenFigureResult | null
   if (!o || typeof o !== 'object') return false
+  if (o.blank === true) {
+    return typeof o.project === 'string' && typeof o.stem === 'string'
+  }
   return (
     typeof o.session_id === 'string' &&
     !!o.manifest &&
@@ -98,14 +102,16 @@ function Boot() {
 
   useEffect(() => {
     let done = false
-    const accept = (payload: unknown) => {
+    const accept = async (payload: unknown) => {
       if (done || !isOpenResult(payload)) return
       done = true
-      const { panelId: pid } = seedSession(payload)
+      const { panelId: pid } = payload.blank
+        ? await seedBlankSession(payload)
+        : seedSession(payload)
       setOpen(payload)
       setPanelId(pid)
       setState('ready')
-      void hydrateSiblingSessions(payload)
+      if (!payload.blank) void hydrateSiblingSessions(payload)
     }
 
     // 画布跟随 **Codex host** 的界面语言（issue #30）：iframe 自己探测到的
@@ -163,7 +169,7 @@ function Boot() {
     }
   }, [])
 
-  if (state === 'ready' && open && panelId) {
+  if (state === 'ready' && open) {
     return <McpApp bridge={bridge} open={open} panelId={panelId} />
   }
   // 走到这里 state 必然不是 ready（上面那个分支已经处理掉了），

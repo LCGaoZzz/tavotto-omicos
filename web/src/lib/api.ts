@@ -18,6 +18,10 @@ export interface PanelInfo {
   /** 有值 = 由 matplotlib 脚本产出，可参数化编辑 */
   script?: string
   cost?: string
+  /** MCP embeds cannot fetch the desktop /api/render URL. `null` is an
+   * explicit placeholder for an imported asset without a preview; `undefined`
+   * keeps the ordinary desktop URL fallback. */
+  preview_url?: string | null
   /**
    * 「写回原始文件」时一并烙下的 override 基线。
    * 磁盘上的 PDF/PNG 已经包含这些修改，新建面板实例要继承它，

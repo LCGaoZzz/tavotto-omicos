@@ -21,7 +21,7 @@ import { renderKey, useRenderStore } from '@/store/renderStore'
 import { useUiStore } from '@/store/uiStore'
 import type { PanelObject } from '@/types/document'
 import type { AppsBridge, ToolCallResult } from './appsBridge'
-import { appendSession, installMcpTransport, seedSession, unwrap, type OpenFigureResult } from './session'
+import { appendSession, installMcpTransport, seedBlankSession, seedSession, unwrap, type OpenFigureResult } from './session'
 
 const manifest = (tickPt = 9): Manifest =>
   ({
@@ -93,6 +93,22 @@ beforeEach(() => {
 })
 
 describe('seedSession', () => {
+  it('为新建项目使用 Tavotto 原生空文档并保留导入素材清单', async () => {
+    await seedBlankSession({
+      blank: true,
+      ok: true,
+      project: '/tmp/figure-studio',
+      stem: 'Untitled figure',
+      assets: [{ id: 'asset-1', name: 'plot.png', mime: 'image/png', previewDataUrl: null }],
+    } as OpenFigureResult)
+
+    expect(useDocumentStore.getState().doc.objects).toHaveLength(0)
+    expect([useDocumentStore.getState().doc.page.w, useDocumentStore.getState().doc.page.h]).toEqual([150, 100])
+    expect(useAssetStore.getState().panels.map((panel) => panel.name)).toEqual(['plot.png'])
+    expect(useAssetStore.getState().panels[0].preview_url).toBeNull()
+    expect(useUiStore.getState().leftTab).toBe('assets')
+  })
+
   it('把工具响应灌进既有 stores，而不是另建一套画布状态', () => {
     const open = openResult()
     const { panelId, fileId } = seedSession(open)

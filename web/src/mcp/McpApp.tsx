@@ -1,4 +1,6 @@
 import { FigureError } from '@/components/FigureError'
+import { CommandPalette } from '@/components/CommandPalette'
+import { MarkTools } from '@/components/TopBar'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, Download, Lightbulb, LoaderCircle, Redo2, Undo2, ShieldCheck, ShieldQuestionMark, TriangleAlert } from '@/components/ui/icons'
@@ -38,7 +40,7 @@ export function McpApp({
 }: {
   bridge: AppsBridge
   open: OpenFigureResult
-  panelId: string
+  panelId: string | null
 }) {
   // 既有的引擎同步器：文档一变就按策略重渲染。传输层已经换成 MCP 了，
   // 这里一行都不用改
@@ -65,7 +67,7 @@ export function McpApp({
   const [busy, setBusy] = useState<'preflight' | 'export' | null>(null)
   const [notice, setNotice] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
   const [confirmForced, setConfirmForced] = useState(false)
-  const sessionId = sessionIdFor(open.stem + '.pdf') ?? open.session_id
+  const sessionId = open.blank ? '' : (sessionIdFor(open.stem + '.pdf') ?? open.session_id)
 
   // 改过图之后旧的预检结论就不作数了——**标成过期而不是留着**，
   // 留着的话用户会拿一份属于上一版的「通过」去导出
@@ -81,6 +83,7 @@ export function McpApp({
   }, [lastPatches])
 
   const runPreflight = useCallback(async () => {
+    if (open.blank) return
     setBusy('preflight')
     setNotice(null)
     try {
@@ -92,10 +95,11 @@ export function McpApp({
     } finally {
       setBusy(null)
     }
-  }, [bridge, sessionId])
+  }, [bridge, sessionId, open.blank])
 
   const runExport = useCallback(
     async (formats: string[]) => {
+      if (open.blank) return
       setBusy('export')
       setNotice(null)
       try {
@@ -119,7 +123,7 @@ export function McpApp({
         setBusy(null)
       }
     },
-    [bridge, sessionId, confirmForced, open.stem, preflight],
+    [bridge, sessionId, confirmForced, open.stem, preflight, open.blank],
   )
 
   // 手势结束后画布尺寸可能变了：告诉 host 一声（inline 模式下它据此调高度）
@@ -147,19 +151,18 @@ export function McpApp({
     !!preflight
     && ((preflight.errors ?? []).length > 0 || (preflight.not_verifiable ?? []).length > 0)
 
-  if (!panel) {
-    return <div className="p-4 text-sm text-ink-2">{mc('panelGone')}</div>
-  }
-
   return (
     <div className="flex h-full w-full flex-col bg-bg text-ink">
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border bg-surface px-3">
         <span className="truncate text-base font-medium">{open.stem}</span>
         <span className="shrink-0 rounded-sm bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-ink-3">
-          {open.profile.profile_id} v{open.profile.profile_version}
+          {open.profile?.profile_id ?? 'blank'}{open.profile?.profile_version ? ` v${open.profile.profile_version}` : ''}
         </span>
         <span className="shrink-0 font-mono text-xs text-ink-3">
-          {translate('measure.mmSize', { w: panel.w.toFixed(1), h: panel.h.toFixed(1) })}
+          {translate('measure.mmSize', {
+            w: (panel?.w ?? 150).toFixed(1),
+            h: (panel?.h ?? 100).toFixed(1),
+          })}
         </span>
 
         <span className="mx-1 h-4 w-px bg-border" />
@@ -170,6 +173,8 @@ export function McpApp({
           <Redo2 size={ICON_SIZE.md} />
         </IconButton>
 
+        <MarkTools />
+
         <span className="flex-1" />
 
         <RenderState rendering={rendering} pending={pending} error={renderError} />
@@ -177,11 +182,12 @@ export function McpApp({
           counts={counts}
           stale={preflightStale}
           loading={busy === 'preflight'}
+          disabled={open.blank}
           onClick={() => void runPreflight()}
         />
         <button
           className="flex h-7 shrink-0 items-center gap-1.5 rounded-sm bg-ink px-2.5 text-xs text-white disabled:opacity-40"
-          disabled={busy != null || pending || (needsConfirm && !confirmForced)}
+          disabled={open.blank || busy != null || pending || (needsConfirm && !confirmForced)}
           title={
             pending
               ? mc('exportPendingTitle')
@@ -226,6 +232,15 @@ export function McpApp({
         </p>
       )}
 
+      {open.blank && (
+        <p className="shrink-0 border-b border-border bg-surface-2 px-3 py-1.5 text-xs text-ink-2">
+          {translate('mcp.blankCanvasHint', {
+            ns: 'dialogs',
+            defaultValue: '这是一个空白 Tavotto 画布。请从素材栏添加图形；导入真实图形后即可预检和导出。',
+          })}
+      </p>
+      )}
+
       <div className="relative flex min-h-0 flex-1 bg-bg">
         {/* MCP 画布仍然使用同一套 Tavotto 工作台侧栏：素材、画布、图层、图内
             元素和问题面板都是真实 store / action，不是静态演示。MCP 会话没有
@@ -244,10 +259,18 @@ export function McpApp({
           </div>
         </div>
         <aside className="flex w-[304px] shrink-0 flex-col overflow-y-auto border-l border-border bg-surface">
-          <ElementInspector panel={panel} />
-          <IssueList issues={issues} stale={preflightStale} panel={panel} />
+          {panel ? <ElementInspector panel={panel} /> : (
+            <div className="p-3 text-xs leading-relaxed text-ink-2">
+              {translate('mcp.blankInspectorHint', {
+                ns: 'dialogs',
+                defaultValue: '选择素材或插入文字、形状后，这里会显示对象属性。',
+              })}
+            </div>
+          )}
+          {panel && <IssueList issues={issues} stale={preflightStale} panel={panel} />}
         </aside>
       </div>
+      <CommandPalette />
     </div>
   )
 }
@@ -323,11 +346,13 @@ function PreflightPill({
   counts,
   stale,
   loading,
+  disabled,
   onClick,
 }: {
   counts: Record<string, number>
   stale: boolean
   loading: boolean
+  disabled?: boolean
   onClick: () => void
 }) {
   const err = counts.error ?? 0
@@ -337,6 +362,7 @@ function PreflightPill({
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className={cn(
         'flex h-7 shrink-0 items-center gap-1.5 rounded-sm border px-2 text-xs',
         stale

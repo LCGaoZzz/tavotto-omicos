@@ -534,11 +534,15 @@ export function AssetBrowser() {
         {/* 白弹窗里不再给图套一个框：白上白无需边（宪法第八节；左栏审计 L39） */}
         {zoomed?.kind === 'file' && (
           <div className="flex items-center justify-center bg-white p-2">
-            <img
-              src={renderUrl(zoomed.panel.id, 800, zoomed.panel.mtime)}
-              alt={ab('zoomAlt', { name: fileName(zoomed.panel.id) })}
-              className="max-h-[56vh] max-w-full object-contain"
-            />
+            {zoomed.panel.preview_url === null ? (
+              <div className="flex h-40 w-full items-center justify-center text-sm text-ink-3">—</div>
+            ) : (
+              <img
+                src={zoomed.panel.preview_url ?? renderUrl(zoomed.panel.id, 800, zoomed.panel.mtime)}
+                alt={ab('zoomAlt', { name: fileName(zoomed.panel.id) })}
+                className="max-h-[56vh] max-w-full object-contain"
+              />
+            )}
           </div>
         )}
         {zoomed?.kind === 'runtime' && <RuntimeZoom asset={zoomed.asset} />}
@@ -800,13 +804,19 @@ function AssetCard({
       style={{ contentVisibility: 'auto', containIntrinsicSize: '140px' }}
     >
       <CardPreview>
-        <img
-          loading="lazy"
-          src={renderUrl(panel.id, 400, panel.mtime)}
-          alt=""
-          draggable={false}
-          className="h-full w-full object-contain p-1"
-        />
+        {panel.preview_url === null ? (
+          <div className="flex h-full w-full items-center justify-center bg-surface-2 p-2 text-center text-xs text-ink-3">
+            —
+          </div>
+        ) : (
+          <img
+            loading="lazy"
+            src={panel.preview_url ?? renderUrl(panel.id, 400, panel.mtime)}
+            alt=""
+            draggable={false}
+            className="h-full w-full object-contain p-1"
+          />
+        )}
 
         {/* 不是 <button>：option 里不许再嵌交互控件（axe nested-interactive，
             serious）——哪怕 tabIndex=-1 也算。这两个只是鼠标用户的就近入口；
