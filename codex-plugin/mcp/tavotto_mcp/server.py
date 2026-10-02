@@ -392,6 +392,24 @@ def _tools() -> list[dict]:
                 "additionalProperties": False,
             },
         },
+        {
+            # Host-only MCP App persistence. It is intentionally omitted from
+            # the Figure Studio user-facing tool matrix, but must be listed so
+            # the host MCP manager can dispatch the embedded canvas save call.
+            "name": "tavotto_save_canvas",
+            "title": "保存画布快照",
+            "description": "保存宿主 Figure Studio 画布的可恢复快照；仅供嵌入式 App 使用。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_path": {"type": "string"},
+                    "state": {"type": "object"},
+                },
+                "required": ["project_path", "state"],
+                "additionalProperties": False,
+            },
+            "_meta": {"ui": {"visibility": ["app"]}},
+        },
     ]
     if ui:
         by_name = {t["name"]: t for t in tools}
@@ -941,6 +959,14 @@ def _call_close(args: dict) -> dict:
     }
 
 
+def _call_save_canvas(args: dict) -> dict:
+    out = bridge.save_canvas_state(
+        str(args.get("project_path") or ""),
+        args.get("state") if isinstance(args.get("state"), dict) else {},
+    )
+    return {"content": _text(f"画布已保存：{out['path']}"), "structuredContent": out}
+
+
 def _call_health(args: dict) -> dict:
     """能力自检：引擎 / 画布 / 项目根，一次说清。**先体检再出图**（便宜）。"""
     import time as _time
@@ -991,6 +1017,7 @@ HANDLERS = {
     "tavotto_export": _call_export,
     "tavotto_verify_replay": _call_verify,
     "tavotto_refresh_project": _call_refresh,
+    "tavotto_save_canvas": _call_save_canvas,
     "tavotto_close_session": _call_close,
 }
 

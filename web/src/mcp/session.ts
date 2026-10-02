@@ -12,7 +12,8 @@ import { useScriptLibraryStore } from '@/store/scriptLibraryStore'
 import { useDocumentStore } from '@/store/documentStore'
 import { useRenderStore } from '@/store/renderStore'
 import { useUiStore } from '@/store/uiStore'
-import type { PanelInfo } from '@/lib/api'
+import type { PanelCapability, PanelInfo } from '@/lib/api'
+import type { ProjectDocument } from '@/types/document'
 import type { AppsBridge, ToolCallResult } from './appsBridge'
 
 /**
@@ -50,6 +51,8 @@ export interface OpenFigureResult {
    * native empty document model and intentionally has no engine session. */
   blank?: boolean
   assets?: BlankAssetPayload[]
+  /** Host-persisted Figure 1 composition; absent means a new blank canvas. */
+  canvasState?: ProjectDocument | null
 }
 
 export interface BlankAssetPayload {
@@ -115,6 +118,35 @@ const pendingSourceOf = new Map<string, { project: string; stem: string }>()
  */
 const rasterPngOf = new Map<string, { variant: string; url: string }>()
 
+function capabilityFor(asset: BlankAssetPayload): PanelCapability {
+  if (asset.sourceScript || asset.sourceStem) {
+    return {
+      status: 'editable',
+      reason_code: 'registered_source',
+      script: asset.sourceScript ?? null,
+      candidates: [],
+      can_probe: false,
+      can_manual_link: false,
+    }
+  }
+  return {
+    status: 'layout_only',
+    reason_code: 'no_source_candidate',
+    script: null,
+    candidates: [],
+    can_probe: false,
+    can_manual_link: false,
+  }
+}
+
+function visibleMaterial(asset: BlankAssetPayload): boolean {
+  if (asset.sourceKind === 'supporting_asset') return false
+  const mime = (asset.mime ?? '').toLowerCase()
+  const name = (asset.name ?? '').toLowerCase()
+  return !mime.includes('json') && !mime.includes('csv') && !mime.includes('tab-separated')
+    && !/\.(json|csv|tsv)$/.test(name)
+}
+
 /** 拿到的是不是这一组 patches 自己的位图；不是就宁可没有。 */
 function rasterPngFor(sessionId: string, patches: unknown[]): string | null {
   const hit = rasterPngOf.get(sessionId)
@@ -140,7 +172,8 @@ export const fileIdFor = embeddedFileIdFor
 
 /** Seed a newly-created host project with Tavotto's own empty document. */
 export async function seedBlankSession(open: OpenFigureResult): Promise<{ panelId: null }> {
-  await useDocumentStore.getState().switchDocument(emptyProject(), newId('mcp-blank'))
+  const saved = open.canvasState && typeof open.canvasState === 'object' ? open.canvasState : emptyProject()
+  await useDocumentStore.getState().switchDocument(saved, newId('mcp-blank'))
   useRuntimeAssetStore.getState().clear()
   useRuntimeAssetStore.setState({ assets: [], assetsLoading: false, assetsError: null })
   useScriptLibraryStore.getState().clear()
@@ -157,7 +190,7 @@ export async function seedBlankSession(open: OpenFigureResult): Promise<{ panelI
     loaded: true, loading: false, error: null,
   })
 
-  const panels: PanelInfo[] = (open.assets ?? []).filter((asset) => !(asset.mime ?? '').toLowerCase().includes('python') && asset.sourceKind !== 'python').map((asset) => {
+  const panels: PanelInfo[] = (open.assets ?? []).filter((asset) => !(asset.mime ?? '').toLowerCase().includes('python') && asset.sourceKind !== 'python' && visibleMaterial(asset)).map((asset) => {
     const mime = asset.mime?.toLowerCase() ?? ''
     const kind: PanelInfo['kind'] = mime === 'application/pdf' || mime.includes('svg') ? 'pdf' : 'raster'
     return {
@@ -167,6 +200,8 @@ export async function seedBlankSession(open: OpenFigureResult): Promise<{ panelI
       kind,
       source_path: asset.relativePath ? `${open.project}/${asset.relativePath}` : undefined,
       mime: asset.mime,
+      script: asset.sourceScript || undefined,
+      capability: capabilityFor(asset),
       native_w_mm: 100,
       native_h_mm: 75,
       mtime: 0,
@@ -363,6 +398,7 @@ export async function appendImportedMaterial(
     kind: mime === 'application/pdf' || mime.includes('svg') ? 'pdf' : 'raster',
     source_path: imported.relativePath ? `${project}/${imported.relativePath}` : undefined,
     mime: imported.mime,
+    capability: capabilityFor(imported),
     native_w_mm: 100,
     native_h_mm: 75,
     mtime: 0,

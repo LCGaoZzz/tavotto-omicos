@@ -826,6 +826,16 @@ function AssetCard({
           />
         )}
 
+        {panel.capability && (
+          <span
+            data-capability-badge
+            className="absolute right-1 top-1 rounded-sm bg-surface/80 px-1.5 py-0.5 text-[10px] leading-none text-ink-2 shadow-thumb backdrop-blur-[1px]"
+            title={reasonText(panel.capability)}
+          >
+            {statusLabel(panel.capability.status)}
+          </span>
+        )}
+
         {/* 不是 <button>：option 里不许再嵌交互控件（axe nested-interactive，
             serious）——哪怕 tabIndex=-1 也算。这两个只是鼠标用户的就近入口；
             键盘 / 读屏用户在 option 上按 Enter / Shift+Enter 走同一对动作，

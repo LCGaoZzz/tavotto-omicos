@@ -181,9 +181,12 @@ def test_tools_list_shape():
         "tavotto_verify_replay",
         "tavotto_refresh_project",
         "tavotto_close_session",
+        "tavotto_save_canvas",
     ]
     for t in tools:
         assert t["description"] and t["inputSchema"]["type"] == "object"
+    hidden = next(t for t in tools if t["name"] == "tavotto_save_canvas")
+    assert hidden["_meta"]["ui"]["visibility"] == ["app"]
 
 
 def test_only_canvas_tools_carry_the_ui_resource():

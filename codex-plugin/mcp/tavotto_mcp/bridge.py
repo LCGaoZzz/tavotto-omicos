@@ -341,6 +341,41 @@ def close_session(session_id: str) -> dict:
     }
 
 
+def save_canvas_state(project_path: str, state: dict) -> dict:
+    """Persist the Tavotto Figure 1 composition for the next host open.
+
+    The MCP iframe is intentionally stateless: it may be destroyed when the
+    user returns to Figure Studio's project list.  The canvas document is host
+    composition data, so it is written beside the host project rather than to
+    browser storage or a fake engine session.  The path is checked against the
+    same workspace roots as every other Tavotto file operation.
+    """
+    if not isinstance(state, dict):
+        raise BridgeError("canvas state 必须是对象", code="bad_canvas_state")
+    try:
+        encoded = json.dumps(state, ensure_ascii=False, separators=(",", ":"))
+    except (TypeError, ValueError) as exc:
+        raise BridgeError(f"canvas state 不是可保存的 JSON: {exc}", code="bad_canvas_state") from exc
+    if len(encoded.encode("utf-8")) > 16 * 1024 * 1024:
+        raise BridgeError("canvas state 太大，拒绝写入", code="canvas_state_too_large")
+    project = Path(check_scope(project_path))
+    if not project.is_dir():
+        raise BridgeError(f"项目目录不存在: {project}", code="project_missing")
+    target = project / ".tavotto-canvas.json"
+    temporary = project / ".tavotto-canvas.json.tmp"
+    body = {"version": 1, "saved_at": time.time(), "state": state}
+    try:
+        temporary.write_text(json.dumps(body, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        os.replace(temporary, target)
+    except OSError as exc:
+        try:
+            temporary.unlink()
+        except OSError:
+            pass
+        raise BridgeError(f"无法保存画布: {exc}", code="canvas_state_save_failed") from exc
+    return {"ok": True, "project": str(project), "path": str(target), "saved_at": body["saved_at"]}
+
+
 def _evict_if_needed() -> list[str]:
     """超额时按最久未用淘汰，**并把淘汰了谁交出去**。
 

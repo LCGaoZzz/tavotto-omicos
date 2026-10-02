@@ -48,6 +48,7 @@ export function McpApp({
 
   const objects = useDocumentStore((s) => s.doc.objects)
   const page = useDocumentStore((s) => s.doc.page)
+  const doc = useDocumentStore((s) => s.doc)
   const assets = useAssetStore((s) => s.byId)
   const panel = objects.find((o): o is PanelObject => o.id === panelId && o.type === 'panel')
   const canUndo = useDocumentStore((s) => s.past.length > 0)
@@ -56,6 +57,12 @@ export function McpApp({
   const redo = useDocumentStore((s) => s.redo)
   const leftOpen = useUiStore((s) => s.leftOpen)
   const rightOpen = useUiStore((s) => s.rightOpen)
+
+  // Keep the latest document available to the unmount flush below. The
+  // debounced effect handles ordinary edits; this ref closes the gap when a
+  // user immediately returns to Figure Studio after the last edit.
+  const latestDoc = useRef(doc)
+  latestDoc.current = doc
 
   // MCP 会话绕过桌面版 App 的布局初始化。等 hydration 把首个 panel 装进
   // document 后再打开官方 Inspector；过早设置会被 session restore 的布局快照覆盖。
@@ -83,6 +90,37 @@ export function McpApp({
   const [exportFormats, setExportFormats] = useState<string[]>(['pdf', 'png'])
   const [exportDpi, setExportDpi] = useState('600')
   const sessionId = open.blank ? '' : (sessionIdFor(open.stem + '.pdf') ?? open.session_id)
+
+  // The iframe can be destroyed when the user returns to the Figure Studio
+  // project list. Persist the host composition outside browser storage so a
+  // later open restores Figure 1, positions, annotations and dimensions.
+  useEffect(() => {
+    if (!open.blank || !open.project) return
+    const state = useDocumentStore.getState().buildProject()
+    const timer = window.setTimeout(() => {
+      void bridge.callTool('tavotto_save_canvas', {
+        project_path: open.project,
+        state,
+      }).catch(() => {
+        // A transient host restart must not interrupt editing; the next edit
+        // retries the same durable snapshot.
+      })
+    }, 400)
+    return () => window.clearTimeout(timer)
+  }, [bridge, doc, open.blank, open.project])
+
+  useEffect(() => {
+    if (!open.blank || !open.project) return
+    return () => {
+      void bridge.callTool('tavotto_save_canvas', {
+        project_path: open.project,
+        state: useDocumentStore.getState().buildProject() ?? latestDoc.current,
+      }).catch(() => {
+        // The next open will still show the last durable snapshot if the
+        // host is restarting while the iframe is being closed.
+      })
+    }
+  }, [bridge, open.blank, open.project])
 
   // 改过图之后旧的预检结论就不作数了——**标成过期而不是留着**，
   // 留着的话用户会拿一份属于上一版的「通过」去导出
