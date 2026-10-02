@@ -388,7 +388,10 @@ export async function appendImportedMaterial(
   project: string,
   imported: ImportedMaterialPayload,
 ): Promise<void> {
-  if (!imported.id) return
+  // Companion CSV/JSON files are staged beside managed figures so their
+  // scripts can read them, but they are not visual materials. Keep the same
+  // filtering rule for a live import as for the initial project hydrate.
+  if (!imported.id || !visibleMaterial(imported)) return
   const mime = imported.mime?.toLowerCase() ?? ''
   const fileId = imported.id
   const info: PanelInfo = {
