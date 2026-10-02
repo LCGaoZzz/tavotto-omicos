@@ -40,6 +40,7 @@ import importlib
 import importlib.abc
 import json
 import os
+import re
 import runpy
 import shutil
 import sys
@@ -59,6 +60,18 @@ import matplotlib.figure as mfigure  # noqa: E402
 # 补进来、相对路径只读回退）与浏览器 playground **共用同一份实现**。抄一份
 # 进来的话，同一个脚本会在两个入口里产出不同的 stem——前端按 stem 索引一切。
 import figcapture  # noqa: E402
+
+
+_OMICOOS_COLUMN_SEM = re.compile(r"\b([A-Za-z_]\w*)\.sem\b(?!\s*\()")
+
+
+def _normalize_managed_source(source: str) -> str:
+    """Keep legacy OmicOS DataFrame-column syntax runnable under pandas."""
+    if not source.startswith("# OmicOS managed figure source v1"):
+        return source
+    if ".sem" not in source or not re.search(r"[\"']sem[\"']\s*:", source):
+        return source
+    return _OMICOOS_COLUMN_SEM.sub(r'\1["sem"]', source)
 
 # Figure 到手之后的编辑语义（instrument / manifest / override / 渲染 / 导出 /
 # 快照还原）与**信封语义**都不是 safe worker 私有的：native bridge（ADR 0020）
@@ -590,7 +603,26 @@ class Worker(wireproto.V1Handler):
         with contextlib.redirect_stdout(sys.stderr):
             if self.entry == "__main__":
                 try:
-                    script_namespace = runpy.run_path(str(self.script), run_name="__main__")
+                    source_text = self.script.read_text(encoding="utf-8")
+                    normalized = _normalize_managed_source(source_text)
+                    if normalized != source_text:
+                        namespace = {
+                            "__name__": "__main__",
+                            "__file__": str(self.script),
+                            "__cached__": None,
+                            "__doc__": None,
+                            "__loader__": None,
+                            "__package__": None,
+                            "__spec__": None,
+                        }
+                        exec(
+                            compile(normalized, str(self.script), "exec", dont_inherit=True),
+                            namespace,
+                            namespace,
+                        )
+                        script_namespace = namespace
+                    else:
+                        script_namespace = runpy.run_path(str(self.script), run_name="__main__")
                 except NameError:
                     # 只对未定义临时变量做一次恢复；其它异常仍保持原有失败语义。
                     print(
@@ -633,12 +665,16 @@ class Worker(wireproto.V1Handler):
                 self.dropped_figures = dropped
 
         if script_namespace is not None:
-            fallback, dropped = figcapture.collect_namespace_figures(
-                self.session.capture,
-                self.script.stem,
-                script_namespace,
-                lambda value: isinstance(value, mfigure.Figure),
-            )
+            collect_namespace = getattr(figcapture, "collect_namespace_figures", None)
+            if collect_namespace is None:
+                fallback, dropped = ([], 0)
+            else:
+                fallback, dropped = collect_namespace(
+                    self.session.capture,
+                    self.script.stem,
+                    script_namespace,
+                    lambda value: isinstance(value, mfigure.Figure),
+                )
             for stem in fallback:
                 self.session.capture_source[stem] = figcapture.SOURCE_PYPLOT
             if dropped:

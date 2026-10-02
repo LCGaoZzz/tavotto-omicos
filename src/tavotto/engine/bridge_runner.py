@@ -17,7 +17,7 @@
 | argv | `[脚本自身]` | **用户的原样** |
 | savefig | 吞掉 | **透传**（照常写文件）+ 捕获 |
 | 写/删守卫 | 有 | **无**（脚本拥有用户的全部权限） |
-| stdout | 重定向到 stderr | **原样是用户的**（协议走独立 socket） |
+| stdout | 重定向到 stderr | **用户输出仍保留，但统一为 UTF-8**（协议走独立 socket） |
 | 控制通道 | stdin/stdout 行协议 | 127.0.0.1 loopback + token |
 | 协议信封 | worker v1 | **同一个 worker v1**（`wireproto`） |
 | Figure 编辑语义 | `figsession` | **同一个 `figsession`** |
@@ -54,6 +54,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import socket
 import sys
 import threading
@@ -259,6 +260,7 @@ def run_script(target: str, argv: list) -> None:
     sys.path.insert(0, os.path.dirname(abspath))
     with io.open_code(abspath) as f:
         source = f.read()
+    source = _normalize_managed_source(source)
     # `dont_inherit=True` **是必须的**：本文件自己有 `from __future__ import
     # annotations`，而 `compile()` 默认会把**调用处生效的** future 语句一并
     # 传给被编译的代码。于是用户脚本会在不知情的情况下拿到 PEP 563 语义——
@@ -361,6 +363,45 @@ def _take_token() -> str:
     return os.environ.pop(TOKEN_ENV, "")
 
 
+def _configure_user_stdio_utf8() -> None:
+    """Keep user-script diagnostics printable on Windows locales.
+
+    The native bridge runs the user's interpreter directly. On a Chinese
+    Windows installation that interpreter commonly gives ``sys.stdout`` the
+    GBK codec, while scientific libraries such as OmicVerse print emoji or
+    other Unicode diagnostics during style setup. A direct run then raises
+    ``UnicodeEncodeError`` before the first figure is created, which Tavotto
+    can only report as an empty capture. The control protocol is on a
+    separate UTF-8 socket, so replacing the user streams' error policy does
+    not affect protocol framing or figure semantics.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (OSError, ValueError):
+                pass
+
+
+_OMICOOS_COLUMN_SEM = re.compile(r"\b([A-Za-z_]\w*)\.sem\b(?!\s*\()")
+
+
+def _normalize_managed_source(source: str) -> str:
+    """Repair a pandas attribute/method collision in managed replay sources.
+
+    OmicOS-generated multi-panel scripts historically used ``sub.sem`` for a
+    DataFrame column named ``sem``. Current pandas resolves that spelling to
+    ``DataFrame.sem`` (a method), so replay fails before the selected figure is
+    captured. Only the generated managed-source format is eligible, and method
+    calls such as ``df.sem()`` are left untouched.
+    """
+    if not source.startswith("# OmicOS managed figure source v1"):
+        return source
+    if ".sem" not in source or not re.search(r"[\"']sem[\"']\s*:", source):
+        return source
+    return _OMICOOS_COLUMN_SEM.sub(r'\1["sem"]', source)
+
+
 class Control:
     """与父进程的一条控制连接。**只在主线程上使用。**"""
 
@@ -371,9 +412,8 @@ class Control:
         # Windows 的默认 stdio 编码跟系统区域走（常是 cp936/cp1252），而响应里
         # ensure_ascii=False——中文标签、µ、⁻¹ 一出现就 UnicodeEncodeError。
         #
-        # **刻意不 reconfigure 用户的 sys.stdout/stderr**（safe worker 那边会，
-        # 因为协议就跑在它的 stdout 上）。这里协议在独立 socket 上，而用户的
-        # stdio 是他程序的一部分——替他改编码就不是"与你自己敲那条命令等同"了。
+        # 用户 stdio 在 main() 中统一为 UTF-8；这里协议仍然走独立 socket，
+        # 不会把用户输出混入控制帧。
         self.rfile = self.sock.makefile("r", encoding="utf-8", newline="\n")
         self._send({HELLO_KEY: 1, "token": token, "pid": os.getpid(), "protocol_version": 1})
         line = self.rfile.readline()
@@ -753,6 +793,7 @@ def _derive_target_facts(args) -> None:
 
 def main(argv: list | None = None) -> int:
     args = _parse_args(list(sys.argv[1:] if argv is None else argv))
+    _configure_user_stdio_utf8()
     if not args.out_dir:
         # **不往用户 home 里放一个 dotdir**。产物目录归 Tavotto 管
         # （父进程按 `config.data_dir()` 算好经 `--out-dir` 传进来），
