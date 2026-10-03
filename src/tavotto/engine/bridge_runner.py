@@ -384,16 +384,21 @@ def _configure_user_stdio_utf8() -> None:
 
 
 _OMICOOS_COLUMN_SEM = re.compile(r"\b([A-Za-z_]\w*)\.sem\b(?!\s*\()")
+_WINDOWS_EXTENDED_PREFIX = "\\\\?\\"
 
 
 def _normalize_managed_source(source: str | bytes) -> str | bytes:
-    """Repair a pandas attribute/method collision in managed replay sources.
+    """Repair known portability hazards in managed replay sources.
 
     OmicOS-generated multi-panel scripts historically used ``sub.sem`` for a
     DataFrame column named ``sem``. Current pandas resolves that spelling to
     ``DataFrame.sem`` (a method), so replay fails before the selected figure is
-    captured. Only the generated managed-source format is eligible, and method
-    calls such as ``df.sem()`` are left untouched.
+    captured. They can also contain Windows extended paths (``\\?\\G:\\...``)
+    next to ordinary drive-letter paths. On Windows ``os.path.relpath`` treats
+    those spellings as different mounts and raises ``ValueError`` even when
+    both paths are on the same drive. Only the generated managed-source format
+    is eligible; ordinary user scripts and method calls such as ``df.sem()``
+    are left untouched.
     """
     if isinstance(source, bytes):
         # ``io.open_code`` deliberately returns bytes so that CPython can honor
@@ -410,9 +415,10 @@ def _normalize_managed_source(source: str | bytes) -> str | bytes:
         return normalized.encode("utf-8")
     if not source.startswith("# OmicOS managed figure source v1"):
         return source
-    if ".sem" not in source or not re.search(r"[\"']sem[\"']\s*:", source):
-        return source
-    return _OMICOOS_COLUMN_SEM.sub(r'\1["sem"]', source)
+    normalized = source.replace(_WINDOWS_EXTENDED_PREFIX, "")
+    if ".sem" in normalized and re.search(r"[\"']sem[\"']\s*:", normalized):
+        normalized = _OMICOOS_COLUMN_SEM.sub(r'\1["sem"]', normalized)
+    return normalized
 
 
 class Control:
