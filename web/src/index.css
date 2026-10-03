@@ -51,16 +51,16 @@
   transition: .15s;
 }
 .tavotto-format-switch__input:checked + .tavotto-format-switch__slider {
-  border-color: var(--oc-teal);
-  background: var(--oc-teal);
+  border-color: var(--color-ok);
+  background: var(--color-ok);
 }
 .tavotto-format-switch__input:checked + .tavotto-format-switch__slider::before {
-  border-color: var(--oc-teal-hi);
+  border-color: var(--color-ok);
   transform: translateX(calc(var(--switch-width) - var(--switch-height))) translateY(-.2em);
-  box-shadow: 0 .2em 0 var(--oc-teal-hi);
+  box-shadow: 0 .2em 0 var(--color-ok);
 }
 .tavotto-format-switch__input:focus-visible + .tavotto-format-switch__slider {
-  box-shadow: 0 0 0 2px var(--oc-teal-dim);
+  box-shadow: 0 0 0 2px var(--color-ok-subtle);
 }
 .tavotto-format-switch__input:hover + .tavotto-format-switch__slider::before {
   transform: translateY(-.3em);
@@ -68,7 +68,7 @@
 }
 .tavotto-format-switch__input:hover:checked + .tavotto-format-switch__slider::before {
   transform: translateX(calc(var(--switch-width) - var(--switch-height))) translateY(-.3em);
-  box-shadow: 0 .3em 0 var(--oc-teal-hi);
+  box-shadow: 0 .3em 0 var(--color-ok);
 }
 .tavotto-format-switch__input:disabled + .tavotto-format-switch__slider {
   cursor: not-allowed;
