@@ -87,7 +87,7 @@ _boot_spec.loader.exec_module(bridgeboot)
 #: manifest / overrides**——它们在模块层 import matplotlib 与 numpy，而
 #: `import matplotlib` 会当场读 cwd 下的 matplotlibrc、钉死 rcParams，
 #: 用户脚本自己那句 `matplotlib.use(...)` 的语义就不一样了。
-_PHASE1 = ("figcapture", "patchspec")
+_PHASE1 = ("figcapture", "importscope", "patchspec")
 #: 第二阶段（屏障那一刻才装）：要 matplotlib/numpy 的那几个，而那时用户早就
 #: import 过了；外加只被它们平铺 import 到的纯标准库模块。
 #:
@@ -386,7 +386,7 @@ def _configure_user_stdio_utf8() -> None:
 _OMICOOS_COLUMN_SEM = re.compile(r"\b([A-Za-z_]\w*)\.sem\b(?!\s*\()")
 
 
-def _normalize_managed_source(source: str) -> str:
+def _normalize_managed_source(source: str | bytes) -> str | bytes:
     """Repair a pandas attribute/method collision in managed replay sources.
 
     OmicOS-generated multi-panel scripts historically used ``sub.sem`` for a
@@ -395,6 +395,19 @@ def _normalize_managed_source(source: str) -> str:
     captured. Only the generated managed-source format is eligible, and method
     calls such as ``df.sem()`` are left untouched.
     """
+    if isinstance(source, bytes):
+        # ``io.open_code`` deliberately returns bytes so that CPython can honor
+        # a source encoding cookie when compiling the user script.  Managed
+        # OmicOS sources are UTF-8, but arbitrary user scripts must keep their
+        # original bytes and encoding semantics when no normalization applies.
+        try:
+            decoded = source.decode("utf-8")
+        except UnicodeDecodeError:
+            return source
+        normalized = _normalize_managed_source(decoded)
+        if normalized == decoded:
+            return source
+        return normalized.encode("utf-8")
     if not source.startswith("# OmicOS managed figure source v1"):
         return source
     if ".sem" not in source or not re.search(r"[\"']sem[\"']\s*:", source):
