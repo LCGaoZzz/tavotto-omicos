@@ -150,6 +150,47 @@ def main():
     assert cfg["scripts"]["asset-b.py"]["stems"] == ["B"]
 
 
+def test_managed_replay_sources_with_empty_marker_pair_by_asset_filename(figs):
+    """旧 OmicOS exports still pair a copied source with its same-stem image."""
+    (figs / "sources").mkdir()
+    _script(
+        figs / "sources",
+        "asset-a1b2c3-figure_1791042415039_4.py",
+        """# OmicOS managed figure source v1
+_omicos_replay_target_stem = ""
+
+def main():
+    fig.savefig("shared.png")
+""",
+    )
+    _touch(figs, "figure_1791042415039_4.png")
+
+    cfg, rep = discover.build_draft(figs)
+    assert rep["conflicts"] == {}
+    assert cfg["scripts"]["sources/asset-a1b2c3-figure_1791042415039_4.py"]["stems"] == [
+        "figure_1791042415039_4"
+    ]
+
+
+def test_managed_filename_fallback_does_not_guess_without_artifact(figs):
+    (figs / "sources").mkdir()
+    _script(
+        figs / "sources",
+        "asset-a1b2c3-figure_1791042415039_4.py",
+        """# OmicOS managed figure source v1
+_omicos_replay_target_stem = ""
+
+def main():
+    fig.savefig("shared.png")
+""",
+    )
+
+    info = discover.analyze_script(
+        figs / "sources" / "asset-a1b2c3-figure_1791042415039_4.py", figs
+    )
+    assert info["stems"] == ["shared"]
+
+
 def test_draft_loads_into_registry(figs):
     _script(figs, "fig_a.py", 'def main():\n    save(fig, "FigA_1")\n')
     cfg, _ = discover.build_draft(figs)

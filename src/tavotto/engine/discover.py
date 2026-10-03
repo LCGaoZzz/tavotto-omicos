@@ -40,11 +40,17 @@ OUT_EXTS = figcapture.ARTIFACT_EXTS
 # source is a material-specific view of a shared analysis script; static AST
 # discovery of the original script would otherwise report every sibling stem
 # for every copied source and create false multiple-source conflicts.
-MANAGED_SOURCE_MARKER = "# OmicOS managed figure source v1"
+MANAGED_SOURCE_MARKER = figcapture.MANAGED_SOURCE_MARKER
 MANAGED_TARGET_RE = re.compile(
     r"^\s*_omicos_replay_target_stem\s*=\s*(['\"])(?P<stem>[^'\"]+)\1\s*$",
     re.MULTILINE,
 )
+# Older OmicOS exports copied one managed source per captured image but left the
+# replay target marker empty.  The copied filename is still a stable binding
+# (`asset-<digest>-<artifact stem>.py`) and the matching artifact lives in the
+# same project directory.  Keep this fallback deliberately narrow: it only
+# applies to managed sources and only when an artifact with the inferred stem is
+# actually present, so ordinary scripts continue to use AST discovery.
 # 样式模块及其副本（"paper_style 2.py"）、私有助手、测试与打包脚本。
 # 这两张表只把脚本挡在**自动静态起草**之外（打开项目时的注册表草稿不该混进
 # 测试与工具脚本）；「列给用户挑」的清单（probe.script_inventory）仍然列出
@@ -873,6 +879,18 @@ def _resolve(patterns: set[str], figures_dir: Path) -> tuple[set[str], list[str]
     return stems, unresolved
 
 
+def _managed_filename_target(path: Path, figures_dir: Path) -> str | None:
+    """Infer a managed replay target from its copied filename when necessary.
+
+    OmicOS imported sources are renamed to avoid collisions.  For example,
+    ``sources/asset-a1b2-figure_1.py`` is the source paired with
+    ``figure_1.png`` in the project root.  This is a compatibility fallback for
+    exports whose marker is empty; it never guesses a target that is absent from
+    the project.
+    """
+    return figcapture.managed_fallback_stem(path, figures_dir)
+
+
 def analyze_script(path: Path, figures_dir: Path) -> dict | None:
     """单个脚本 → 报告条目；不是绘图脚本（无入口 / 不存图）返回 None。"""
     try:
@@ -914,6 +932,14 @@ def analyze_script(path: Path, figures_dir: Path) -> dict | None:
         # body contains a shared savefig template that names other figures.
         stems = [managed_target]
         unresolved = []
+    elif source.startswith(MANAGED_SOURCE_MARKER):
+        # Compatibility with managed sources produced before Core populated
+        # `_omicos_replay_target_stem`.  The filename/artifact pairing is the
+        # only safe fallback; if it cannot be proven, retain the AST result.
+        inferred = _managed_filename_target(path, figures_dir)
+        if inferred:
+            stems = [inferred]
+            unresolved = []
     return {
         "entry": entry,
         "stems": sorted(stems),

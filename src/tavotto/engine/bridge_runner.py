@@ -220,7 +220,13 @@ def collect_pyplot(plt) -> None:
     前端按 stem 索引一切。
     """
     global _DROPPED
-    stems, dropped = figcapture.collect_pyplot_figures(_CAPTURE, _SCRIPT_STEM[0], plt)
+    fallback_base = _SCRIPT_STEM[0]
+    if _SCRIPT_SOURCE_PATH and _SCRIPT_PROJECT_ROOT:
+        fallback_base = (
+            figcapture.managed_fallback_stem(_SCRIPT_SOURCE_PATH, _SCRIPT_PROJECT_ROOT)
+            or fallback_base
+        )
+    stems, dropped = figcapture.collect_pyplot_figures(_CAPTURE, fallback_base, plt)
     for stem in stems:
         _CAPTURE_SOURCE[stem] = figcapture.SOURCE_PYPLOT
     if dropped:
@@ -236,6 +242,8 @@ def collect_pyplot(plt) -> None:
 #: 兜底 stem 的基名（`<脚本名>`、`<脚本名>-2`…）。列表包一层是因为钩子闭包
 #: 在解析目标之前就装好了。
 _SCRIPT_STEM = ["figure"]
+_SCRIPT_SOURCE_PATH = ""
+_SCRIPT_PROJECT_ROOT = ""
 
 
 # ---------------------------------------------------------------------------
@@ -384,7 +392,7 @@ def _configure_user_stdio_utf8() -> None:
 
 
 _OMICOOS_COLUMN_SEM = re.compile(r"\b([A-Za-z_]\w*)\.sem\b(?!\s*\()")
-_WINDOWS_EXTENDED_PREFIX = "\\\\?\\"
+_WINDOWS_EXTENDED_PATH = re.compile(r"\\\\\?\\(?=[A-Za-z]:|UNC\\)")
 
 
 def _normalize_managed_source(source: str | bytes) -> str | bytes:
@@ -415,7 +423,10 @@ def _normalize_managed_source(source: str | bytes) -> str | bytes:
         return normalized.encode("utf-8")
     if not source.startswith("# OmicOS managed figure source v1"):
         return source
-    normalized = source.replace(_WINDOWS_EXTENDED_PREFIX, "")
+    # Match only a prefix followed by an actual drive/UNC path.  A generated
+    # source may itself contain ``src.replace("\\\\?\\", "")``; a blind
+    # string replacement would corrupt that valid Python literal.
+    normalized = _WINDOWS_EXTENDED_PATH.sub("", source)
     if ".sem" in normalized and re.search(r"[\"']sem[\"']\s*:", normalized):
         normalized = _OMICOOS_COLUMN_SEM.sub(r'\1["sem"]', normalized)
     return normalized
@@ -789,13 +800,19 @@ def _derive_target_facts(args) -> None:
     module 目标的源文件要等 import 之后才知道，这里先给一个保守值，
     `main()` 在跑完之后按 `sys.modules['__main__'].__file__` 修正。
     """
+    global _SCRIPT_SOURCE_PATH, _SCRIPT_PROJECT_ROOT
+    _SCRIPT_SOURCE_PATH = ""
+    _SCRIPT_PROJECT_ROOT = args.project_root or ""
     if args.target_kind == "script":
         abspath = os.path.abspath(args.target)
         args.source_path = abspath
+        _SCRIPT_SOURCE_PATH = abspath
         stem = os.path.splitext(os.path.basename(abspath))[0]
     else:
         args.source_path = ""
         stem = args.target.rpartition(".")[2] or args.target
+    if _SCRIPT_SOURCE_PATH and _SCRIPT_PROJECT_ROOT:
+        stem = figcapture.managed_fallback_stem(_SCRIPT_SOURCE_PATH, _SCRIPT_PROJECT_ROOT) or stem
     _SCRIPT_STEM[0] = stem
     args.entry = "__main__"
     root = args.project_root or os.getcwd()

@@ -62,15 +62,27 @@ import matplotlib.figure as mfigure  # noqa: E402
 import figcapture  # noqa: E402
 
 _OMICOOS_COLUMN_SEM = re.compile(r"\b([A-Za-z_]\w*)\.sem\b(?!\s*\()")
+_WINDOWS_EXTENDED_PATH = re.compile(r"\\\\\?\\(?=[A-Za-z]:|UNC\\)")
 
 
 def _normalize_managed_source(source: str) -> str:
-    """Keep legacy OmicOS DataFrame-column syntax runnable under pandas."""
+    """Repair portability hazards in generated OmicOS replay sources.
+
+    Core-generated scripts may contain both ordinary drive-letter paths and
+    Windows extended paths (``\\\\?\\G:\\...``).  ``os.path.relpath`` rejects
+    that pair as different mounts even though they refer to the same drive.
+    Normalize the generated source before compiling it, while leaving ordinary
+    user scripts untouched.
+    """
     if not source.startswith("# OmicOS managed figure source v1"):
         return source
-    if ".sem" not in source or not re.search(r"[\"']sem[\"']\s*:", source):
-        return source
-    return _OMICOOS_COLUMN_SEM.sub(r'\1["sem"]', source)
+    # Match only a prefix followed by an actual drive/UNC path.  A generated
+    # source may itself contain ``src.replace("\\\\?\\", "")``; a blind
+    # string replacement would corrupt that valid Python literal.
+    normalized = _WINDOWS_EXTENDED_PATH.sub("", source)
+    if ".sem" in normalized and re.search(r"[\"']sem[\"']\s*:", normalized):
+        normalized = _OMICOOS_COLUMN_SEM.sub(r'\1["sem"]', normalized)
+    return normalized
 
 
 # Figure 到手之后的编辑语义（instrument / manifest / override / 渲染 / 导出 /
@@ -647,10 +659,14 @@ class Worker(wireproto.V1Handler):
         # 只在脚本真的 import 过 pyplot 时才问它：没 import 过就不可能有 pyplot
         # figure，而在这里 import 一次要白付几十毫秒（还会给纯 OO API 的脚本
         # 凭空建一个 figure 管理器）。
+        fallback_base = (
+            figcapture.managed_fallback_stem(self.script, self.figures_dir)
+            or self.script.stem
+        )
         _plt = sys.modules.get("matplotlib.pyplot")
         if _plt is not None:
             fallback, dropped = figcapture.collect_pyplot_figures(
-                self.session.capture, self.script.stem, _plt
+                self.session.capture, fallback_base, _plt
             )
             for stem in fallback:
                 self.session.capture_source[stem] = figcapture.SOURCE_PYPLOT
@@ -671,7 +687,7 @@ class Worker(wireproto.V1Handler):
             else:
                 fallback, dropped = collect_namespace(
                     self.session.capture,
-                    self.script.stem,
+                    fallback_base,
                     script_namespace,
                     lambda value: isinstance(value, mfigure.Figure),
                 )
