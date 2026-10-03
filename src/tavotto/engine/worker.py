@@ -61,7 +61,6 @@ import matplotlib.figure as mfigure  # noqa: E402
 # 进来的话，同一个脚本会在两个入口里产出不同的 stem——前端按 stem 索引一切。
 import figcapture  # noqa: E402
 
-
 _OMICOOS_COLUMN_SEM = re.compile(r"\b([A-Za-z_]\w*)\.sem\b(?!\s*\()")
 
 
@@ -72,6 +71,7 @@ def _normalize_managed_source(source: str) -> str:
     if ".sem" not in source or not re.search(r"[\"']sem[\"']\s*:", source):
         return source
     return _OMICOOS_COLUMN_SEM.sub(r'\1["sem"]', source)
+
 
 # Figure 到手之后的编辑语义（instrument / manifest / override / 渲染 / 导出 /
 # 快照还原）与**信封语义**都不是 safe worker 私有的：native bridge（ADR 0020）

@@ -277,7 +277,9 @@ def source_fingerprint(
     return "sha256:" + hashlib.sha256(canon.encode("utf-8")).hexdigest()
 
 
-def find_original_artifact(project_root: str, stem: str, *, isfile=os.path.isfile, script: str = "") -> str | None:
+def find_original_artifact(
+    project_root: str, stem: str, *, isfile=os.path.isfile, script: str = ""
+) -> str | None:
     """项目根下 stem 的原始产物（相对路径，POSIX）；没有回 None。
 
     判据与 handoff 交接找产物是同一份（它现在就调这里）：只看项目根一层、

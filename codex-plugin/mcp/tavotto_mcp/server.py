@@ -303,7 +303,11 @@ def _tools() -> list[dict]:
                 "type": "object",
                 "properties": {
                     "session_id": {"type": "string"},
-                    "scope": {"type": "string", "enum": ["original", "canvas"], "description": "导出原图会话或当前 Tavotto 画布"},
+                    "scope": {
+                        "type": "string",
+                        "enum": ["original", "canvas"],
+                        "description": "导出原图会话或当前 Tavotto 画布",
+                    },
                     "page_w_mm": {"type": "number"},
                     "page_h_mm": {"type": "number"},
                     "objects": {"type": "array", "items": {"type": "object"}},
@@ -1313,7 +1317,11 @@ class Server:
         return {
             "protocolVersion": version,
             "capabilities": caps,
-            "serverInfo": {"name": SERVER_NAME, "title": "OmicOS Figure Studio", "version": _version()},
+            "serverInfo": {
+                "name": SERVER_NAME,
+                "title": "OmicOS Figure Studio",
+                "version": _version(),
+            },
             "instructions": (
                 "Tavotto 负责结构化图表编辑：改的是 override（gid + prop + value），"
                 "**不会动用户的 Python 源码**。流程：tavotto_open_figure 打开 → "

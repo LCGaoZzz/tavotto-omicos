@@ -251,7 +251,7 @@ export function McpApp({
           onClick={() => setExportOpen(true)}
         >
           {busy === 'export' ? <LoaderCircle size={ICON_SIZE.sm} className="animate-spin" /> : <Download size={ICON_SIZE.sm} />}
-          导出
+          {mc('export')}
         </button>
       </header>
 
@@ -375,9 +375,9 @@ function ExportPanel({
   onExport: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" role="dialog" aria-label="导出">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" role="dialog" aria-label={mc('export')}>
       <div className="w-80 rounded-md border border-border bg-surface p-4 shadow-xl">
-        <h2 className="mb-3 text-sm font-semibold">导出当前画布</h2>
+        <h2 className="mb-3 text-sm font-semibold">{mc('exportCanvas')}</h2>
         <div className="mb-3 flex flex-col gap-2 text-xs">
           {['pdf', 'png', 'tiff'].map((format) => (
             <label key={format} className="flex items-center gap-2">
@@ -387,14 +387,14 @@ function ExportPanel({
           ))}
         </div>
         <label className="mb-4 flex items-center justify-between text-xs">
-          <span>位图 DPI</span>
+          <span>{mc('dpi')}</span>
           <select className="rounded border border-border bg-bg px-2 py-1" value={dpi} onChange={(event) => onDpi(event.target.value)}>
             {['300', '600', '900', '1200'].map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
         </label>
         <div className="flex justify-end gap-2">
-          <button className="rounded border border-border px-3 py-1 text-xs" onClick={onCancel}>取消</button>
-          <button className="rounded bg-ink px-3 py-1 text-xs text-white disabled:opacity-40" disabled={busy || formats.length === 0} onClick={onExport}>导出</button>
+          <button className="rounded border border-border px-3 py-1 text-xs" onClick={onCancel}>{mc('cancel')}</button>
+          <button className="rounded bg-ink px-3 py-1 text-xs text-white disabled:opacity-40" disabled={busy || formats.length === 0} onClick={onExport}>{mc('export')}</button>
         </div>
       </div>
     </div>

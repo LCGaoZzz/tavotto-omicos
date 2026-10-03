@@ -25,15 +25,13 @@
 
 from __future__ import annotations
 
-from . import importscope
-
 import argparse
 import ast
 import json
 import re
 from pathlib import Path, PurePosixPath
 
-from . import atomicio, figcapture, registry
+from . import atomicio, figcapture, importscope, registry
 
 #: 「什么算一份图产物」的唯一出处在 `figcapture.ARTIFACT_EXTS`（捕获描述符
 #: 判原件、handoff 找产物、这里的静态扫描必须是同一张表）；旧名保留作镜像。
@@ -987,9 +985,7 @@ def write_config(figures_dir: str | Path, cfg: dict) -> Path:
     return path
 
 
-def merge(
-    figures_dir: str | Path, *, target_python: str | None = None
-) -> tuple[dict, dict, dict]:
+def merge(figures_dir: str | Path, *, target_python: str | None = None) -> tuple[dict, dict, dict]:
     """草稿并入现有注册表：现有条目原样保留，只追加新脚本与未登记的 stem。
 
     返回 (合并后的配置, 原始报告, 变更摘要)。
@@ -1074,8 +1070,11 @@ def register(
     if append:
         claimed |= {str(x) for x in (prev_entry or {}).get("stems", [])}
     for name, entry_cfg in list(scripts.items()):
-        if (name == script or not isinstance(entry_cfg, dict)
-                or importscope.namespace(name) != importscope.namespace(script)):
+        if (
+            name == script
+            or not isinstance(entry_cfg, dict)
+            or importscope.namespace(name) != importscope.namespace(script)
+        ):
             continue
         kept = [s for s in entry_cfg.get("stems", []) if s not in claimed]
         if len(kept) != len(entry_cfg.get("stems", [])):

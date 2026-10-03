@@ -104,7 +104,7 @@ describe('seedSession', () => {
         { id: 'asset-2', name: 'plot.csv', mime: 'text/csv', previewDataUrl: null },
         { id: 'asset-3', name: 'plot.figmeta.json', mime: 'application/json', previewDataUrl: null },
       ],
-    } as OpenFigureResult)
+    } as unknown as OpenFigureResult)
 
     expect(useDocumentStore.getState().doc.objects).toHaveLength(0)
     expect([useDocumentStore.getState().doc.page.w, useDocumentStore.getState().doc.page.h]).toEqual([150, 100])
@@ -120,7 +120,7 @@ describe('seedSession', () => {
       project: '/tmp/figure-studio',
       stem: 'Untitled figure',
       assets: [],
-    } as OpenFigureResult)
+    } as unknown as OpenFigureResult)
     const bridge = fakeBridge(() => okResult({}))
     await appendImportedMaterial(bridge, '/tmp/figure-studio', {
       id: 'asset-json', name: 'plot.json', mime: 'application/json',

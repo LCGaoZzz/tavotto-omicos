@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import quote
 
+from tavotto import pdfbackend
 from tavotto.engine import (
     artifactcheck as engine_artifactcheck,
     config as engine_config,
@@ -52,7 +53,6 @@ from tavotto.engine import (
     registry as engine_registry,
     telemetry as engine_telemetry,
 )
-from tavotto import pdfbackend
 
 from .roots import (
     CODE_AMBIGUOUS_ROOT,
@@ -355,7 +355,9 @@ def save_canvas_state(project_path: str, state: dict) -> dict:
     try:
         encoded = json.dumps(state, ensure_ascii=False, separators=(",", ":"))
     except (TypeError, ValueError) as exc:
-        raise BridgeError(f"canvas state 不是可保存的 JSON: {exc}", code="bad_canvas_state") from exc
+        raise BridgeError(
+            f"canvas state 不是可保存的 JSON: {exc}", code="bad_canvas_state"
+        ) from exc
     if len(encoded.encode("utf-8")) > 16 * 1024 * 1024:
         raise BridgeError("canvas state 太大，拒绝写入", code="canvas_state_too_large")
     project = Path(check_scope(project_path))
@@ -365,7 +367,9 @@ def save_canvas_state(project_path: str, state: dict) -> dict:
     temporary = project / ".tavotto-canvas.json.tmp"
     body = {"version": 1, "saved_at": time.time(), "state": state}
     try:
-        temporary.write_text(json.dumps(body, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        temporary.write_text(
+            json.dumps(body, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+        )
         os.replace(temporary, target)
     except OSError as exc:
         try:
@@ -1644,14 +1648,18 @@ def export_canvas(
         fmts = ["pdf", "png"]
     target = Path(check_scope(out_dir or str(engine_config.project_export_dir(str(stem)))))
     target.mkdir(parents=True, exist_ok=True)
-    safe_stem = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in stem).strip("._") or "Figure_1"
+    safe_stem = (
+        "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in stem).strip("._") or "Figure_1"
+    )
     canvas = pdfbackend.compose(float(page_w_mm), float(page_h_mm), bool(transparent))
     try:
+
         def resolve(obj: dict, _out_dpi: int) -> Path:
             raw = obj.get("source_path") or obj.get("id")
             if not isinstance(raw, str) or not raw:
                 raise BridgeError("画布面板缺少素材路径", code="source_missing")
             return Path(check_scope(raw))
+
         for obj in objects:
             if not isinstance(obj, dict) or obj.get("hidden"):
                 continue
