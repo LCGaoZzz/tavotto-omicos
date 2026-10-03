@@ -1849,6 +1849,19 @@ def open_project(path_str: str, make_default: bool = True) -> dict:
     with _PROJECT_LOCK:
         existing = PROJECTS.get(pid)
     if existing is not None:
+        # Re-opening a project is also a synchronization boundary.  A source
+        # file may have been copied into the project while the UI was on
+        # another page (or while the watcher was between polls).  Refreshing
+        # here makes the on-disk registry authoritative before the canvas is
+        # opened again, instead of silently reusing a stale in-memory
+        # registry and treating the new material as layout-only.
+        try:
+            refresh_project(existing, reason="open")
+        except engine_refresh.RefreshError as exc:
+            # Keep the already-open project usable when an external edit is
+            # temporarily unreadable.  The watcher/manual refresh can retry;
+            # this is deliberately a warning rather than a second open path.
+            LOG.warning("重新打开项目时刷新失败（%s），保留现有注册表: %s", exc.code, exc)
         if make_default:
             DEFAULT_PROJECT = pid
         engine_config.touch_recent(str(path))
