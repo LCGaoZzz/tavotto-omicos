@@ -74,15 +74,8 @@ export function figureErrorCopy(code: FigureErrorCode, locale: string) {
 /** Copy from an MCP App iframe even when async Clipboard API is unavailable.
  * WebView2 and sandboxed srcdoc frames can reject navigator.clipboard while
  * still allowing the user-gesture-bound legacy copy command. */
-async function copyDiagnosticText(text: string): Promise<void> {
-  try {
-    if (typeof navigator.clipboard?.writeText === 'function') {
-      await navigator.clipboard.writeText(text)
-      return
-    }
-  } catch {
-    // Fall through to the synchronous, user-gesture-bound fallback.
-  }
+function copyWithDocumentCommand(text: string): boolean {
+  if (typeof document.execCommand !== 'function') return false
   const area = document.createElement('textarea')
   area.value = text
   area.setAttribute('readonly', '')
@@ -91,12 +84,21 @@ async function copyDiagnosticText(text: string): Promise<void> {
   area.focus()
   area.select()
   try {
-    if (typeof document.execCommand !== 'function' || !document.execCommand('copy')) {
-      throw new Error('clipboard unavailable')
-    }
+    return document.execCommand('copy')
   } finally {
     area.remove()
   }
+}
+
+async function copyDiagnosticText(text: string): Promise<void> {
+  // Keep the first attempt synchronous so the user gesture survives inside
+  // WebView2/srcdoc frames where Clipboard API permission is unavailable.
+  if (copyWithDocumentCommand(text)) return
+  if (typeof navigator.clipboard?.writeText === 'function') {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+  throw new Error('clipboard unavailable')
 }
 
 /** Framework-independent, light-DOM error component. No hidden brand filtering. */
