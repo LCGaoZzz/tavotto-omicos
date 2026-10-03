@@ -341,6 +341,39 @@ def close_session(session_id: str) -> dict:
     }
 
 
+def session_state(session_id: str) -> dict:
+    """Return the current render snapshot without executing the source again.
+
+    Figure Studio uses this when restoring an embedded canvas after the iframe
+    has been recreated.  Keep the snapshot limited to fields that exist in the
+    current session model so restoring a canvas never mutates the project or
+    starts a worker as a side effect.
+    """
+    session = get_session(session_id)
+    if session.manifest is None:
+        raise BridgeError(
+            "会话还没有 manifest（先 apply 一次 override 或重新 open）",
+            code="no_manifest",
+        )
+    out = {
+        "ok": True,
+        "session_id": session.id,
+        "project": session.project,
+        "stem": session.stem,
+        "script": session.script,
+        "entry": session.entry,
+        "profile": engine_profiles.stamp(session.profile),
+        "patches": list(session.patches),
+        "patch_hash": session.patch_hash(),
+        "render_revision": session.rev,
+        "manifest": session.manifest,
+        "svg": session.svg,
+    }
+    if session.preview is not None:
+        out["preview"] = session.preview
+    return out
+
+
 def save_canvas_state(project_path: str, state: dict) -> dict:
     """Persist the Tavotto Figure 1 composition for the next host open.
 

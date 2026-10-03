@@ -386,6 +386,17 @@ def _tools() -> list[dict]:
             },
         },
         {
+            "name": "tavotto_session_state",
+            "title": "会话当前快照",
+            "description": "取回已打开会话当前的 manifest、SVG、patches 和渲染版本；不重新渲染。画布在打开或恢复时使用。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"session_id": {"type": "string"}},
+                "required": ["session_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "tavotto_close_session",
             "title": "关闭会话",
             "description": "释放引擎会话。用户的项目数据一个字节都不动。",
@@ -963,6 +974,16 @@ def _call_close(args: dict) -> dict:
     }
 
 
+def _call_session_state(args: dict) -> dict:
+    out = bridge.session_state(str(args.get("session_id") or ""))
+    return {
+        "content": _text(
+            f"会话 {out['session_id']} 当前快照：{len(out['patches'])} 条 patch"
+        ),
+        "structuredContent": out,
+    }
+
+
 def _call_save_canvas(args: dict) -> dict:
     out = bridge.save_canvas_state(
         str(args.get("project_path") or ""),
@@ -1021,6 +1042,7 @@ HANDLERS = {
     "tavotto_export": _call_export,
     "tavotto_verify_replay": _call_verify,
     "tavotto_refresh_project": _call_refresh,
+    "tavotto_session_state": _call_session_state,
     "tavotto_save_canvas": _call_save_canvas,
     "tavotto_close_session": _call_close,
 }
