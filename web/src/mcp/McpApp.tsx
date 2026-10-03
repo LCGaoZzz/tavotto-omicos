@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, Download, LoaderCircle, Redo2, Undo2, ShieldCheck, ShieldQuestionMark, TriangleAlert } from '@/components/ui/icons'
 import { ICON_SIZE } from '@/components/ui/Icon'
 import { Checkbox } from '@/components/ui/Checkbox'
+import { Select } from '@/components/ui/Select'
 import { CanvasStage } from '@/canvas/CanvasStage'
 import { CanvasTabs } from '@/components/CanvasTabs'
 import { Inspector } from '@/components/inspector/Inspector'
@@ -376,21 +377,25 @@ function ExportPanel({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" role="dialog" aria-label={mc('export')}>
-      <div className="w-80 rounded-md border border-border bg-surface p-4 shadow-xl">
-        <h2 className="mb-3 text-sm font-semibold">{mc('exportCanvas')}</h2>
+      <div className="w-80 rounded-md border border-border bg-surface p-4 shadow-pop">
+        <h2 className="mb-3 text-sm font-medium">{mc('exportCanvas')}</h2>
         <div className="mb-3 flex flex-col gap-2 text-xs">
           {['pdf', 'png', 'tiff'].map((format) => (
             <label key={format} className="flex items-center gap-2">
-              <input type="checkbox" checked={formats.includes(format)} onChange={() => onToggle(format)} />
+              <Checkbox checked={formats.includes(format)} onChange={() => onToggle(format)} />
               <span>{format.toUpperCase()}</span>
             </label>
           ))}
         </div>
         <label className="mb-4 flex items-center justify-between text-xs">
           <span>{mc('dpi')}</span>
-          <select className="rounded border border-border bg-bg px-2 py-1" value={dpi} onChange={(event) => onDpi(event.target.value)}>
-            {['300', '600', '900', '1200'].map((value) => <option key={value} value={value}>{value}</option>)}
-          </select>
+          <Select
+            value={dpi}
+            onChange={onDpi}
+            options={['300', '600', '900', '1200'].map((value) => ({ value, label: value }))}
+            ariaLabel={mc('dpi')}
+            className="w-24"
+          />
         </label>
         <div className="flex justify-end gap-2">
           <button className="rounded border border-border px-3 py-1 text-xs" onClick={onCancel}>{mc('cancel')}</button>
