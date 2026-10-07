@@ -17,6 +17,7 @@ import { engineTransport, setEngineTransport } from '@/lib/engineTransport'
 import { setOverride } from '@/store/actions'
 import { useAssetStore } from '@/store/assetStore'
 import { useDocumentStore } from '@/store/documentStore'
+import { addFigureToLayout } from '@/store/workspace'
 import { renderKey, useRenderStore } from '@/store/renderStore'
 import { useUiStore } from '@/store/uiStore'
 import type { PanelObject } from '@/types/document'
@@ -79,6 +80,7 @@ const okResult = (body: Record<string, unknown>): ToolCallResult => ({
 let restore = () => {}
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   restore()
   restore = () => {}
   setEngineTransport(null)
@@ -93,6 +95,61 @@ beforeEach(() => {
 })
 
 describe('seedSession', () => {
+  it('无法解码的预览沿用旧尺寸，不阻塞其余素材', async () => {
+    vi.stubGlobal('Image', class {
+      onerror: (() => void) | null = null
+      set src(_value: string) { queueMicrotask(() => this.onerror?.()) }
+    })
+    await seedBlankSession({ blank: true, project: '/tmp/broken', assets: [
+      { id: 'broken', name: 'broken.png', mime: 'image/png', previewDataUrl: 'data:image/png;base64,invalid' },
+      { id: 'absent', name: 'absent.png', mime: 'image/png' },
+    ] } as OpenFigureResult)
+    expect(useAssetStore.getState().panels.map((p) => [p.native_w_mm, p.native_h_mm])).toEqual([[100, 75], [100, 75]])
+  })
+
+  it.each(['hydrate', 'live'] as const)('切换项目后忽略旧项目尚未完成的 %s 图片解码', async (mode) => {
+    let finish: (() => void) | undefined
+    vi.stubGlobal('Image', class {
+      naturalWidth = 800
+      naturalHeight = 800
+      onload: (() => void) | null = null
+      set src(_value: string) { finish = () => this.onload?.() }
+    })
+    const asset = { id: 'late', name: 'late.png', mime: 'image/png', previewDataUrl: 'data:image/png;base64,fixture' }
+    await seedBlankSession({ blank: true, project: '/tmp/old', assets: [] } as unknown as OpenFigureResult)
+    const pending = mode === 'hydrate'
+      ? seedBlankSession({ blank: true, project: '/tmp/old', assets: [asset] } as OpenFigureResult)
+      : appendImportedMaterial(fakeBridge(() => okResult({})), '/tmp/old', asset)
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'))
+    await seedBlankSession({ blank: true, project: '/tmp/new', assets: [] } as unknown as OpenFigureResult)
+    finish!()
+    await pending
+    expect(useAssetStore.getState().figuresDir).toBe('/tmp/new')
+    expect(useAssetStore.getState().panels).toEqual([])
+  })
+
+  it.each([[800, 800], [1600, 800], [800, 1600]])(
+    '导入 %i × %i 的素材在首次打开和实时添加后都按原始比例上画布',
+    async (width, height) => {
+      vi.stubGlobal('Image', class {
+        naturalWidth = width
+        naturalHeight = height
+        onload: (() => void) | null = null
+        set src(_value: string) { queueMicrotask(() => this.onload?.()) }
+      })
+      const asset = { id: 'initial', name: 'radar.png', mime: 'image/png', previewDataUrl: 'data:image/png;base64,fixture' }
+      await seedBlankSession({ blank: true, project: '/tmp/aspect', assets: [asset] } as OpenFigureResult)
+      await appendImportedMaterial(fakeBridge(() => okResult({})), '/tmp/aspect', { ...asset, id: 'live' })
+      for (const id of ['initial', 'live']) {
+        addFigureToLayout(id)
+        const panel = useDocumentStore.getState().doc.objects.find((o) => o.type === 'panel' && o.fileId === id) as PanelObject
+        expect(panel.w).toBe(100)
+        expect(panel.h).toBeCloseTo(100 * height / width)
+        expect(panel.nativeW / panel.nativeH).toBeCloseTo(width / height)
+      }
+    },
+  )
+
   it('为新建项目使用 Tavotto 原生空文档并保留导入素材清单', async () => {
     await seedBlankSession({
       blank: true,
