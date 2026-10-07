@@ -105,6 +105,42 @@ const staticPreviewOf = new Map<string, string>()
 /** Managed source metadata is kept dormant until the user adds that material
  * to Figure 1. Importing a file must never execute or render it implicitly. */
 const pendingSourceOf = new Map<string, { project: string; stem: string }>()
+let materialEpoch = 0
+
+/** Decode the host's image before exposing the material to addPanel. Keep the
+ * existing 100 mm placement width (the payload has no physical-size metadata),
+ * but derive its height from the actual preview, never an assumed 4:3 ratio. */
+async function importedPanel(asset: BlankAssetPayload, project: string): Promise<PanelInfo> {
+  const mime = asset.mime?.toLowerCase() ?? ''
+  let height = 75
+  if (asset.previewDataUrl?.startsWith('data:image/')) {
+    const image = new Image()
+    await new Promise<void>((resolve) => {
+      image.onload = () => {
+        if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+          height = 100 * image.naturalHeight / image.naturalWidth
+        }
+        resolve()
+      }
+      image.onerror = () => resolve()
+      image.src = asset.previewDataUrl!
+    })
+  }
+  return {
+    id: asset.id,
+    name: asset.name,
+    folder: project,
+    kind: mime === 'application/pdf' || mime.includes('svg') ? 'pdf' : 'raster',
+    source_path: asset.relativePath ? `${project}/${asset.relativePath}` : undefined,
+    mime: asset.mime,
+    script: asset.sourceScript || undefined,
+    capability: capabilityFor(asset),
+    native_w_mm: 100,
+    native_h_mm: height,
+    mtime: 0,
+    preview_url: asset.previewDataUrl ?? null,
+  }
+}
 
 /**
  * raster 档下最近一次渲染带回来的位图（ADR 0022）。
@@ -172,8 +208,10 @@ export const fileIdFor = embeddedFileIdFor
 
 /** Seed a newly-created host project with Tavotto's own empty document. */
 export async function seedBlankSession(open: OpenFigureResult): Promise<{ panelId: null }> {
+  const epoch = ++materialEpoch
   const saved = open.canvasState && typeof open.canvasState === 'object' ? open.canvasState : emptyProject()
   await useDocumentStore.getState().switchDocument(saved, newId('mcp-blank'))
+  if (epoch !== materialEpoch) return { panelId: null }
   useRuntimeAssetStore.getState().clear()
   useRuntimeAssetStore.setState({ assets: [], assetsLoading: false, assetsError: null })
   useScriptLibraryStore.getState().clear()
@@ -190,24 +228,10 @@ export async function seedBlankSession(open: OpenFigureResult): Promise<{ panelI
     loaded: true, loading: false, error: null,
   })
 
-  const panels: PanelInfo[] = (open.assets ?? []).filter((asset) => !(asset.mime ?? '').toLowerCase().includes('python') && asset.sourceKind !== 'python' && visibleMaterial(asset)).map((asset) => {
-    const mime = asset.mime?.toLowerCase() ?? ''
-    const kind: PanelInfo['kind'] = mime === 'application/pdf' || mime.includes('svg') ? 'pdf' : 'raster'
-    return {
-      id: asset.id,
-      name: asset.name,
-      folder: open.project,
-      kind,
-      source_path: asset.relativePath ? `${open.project}/${asset.relativePath}` : undefined,
-      mime: asset.mime,
-      script: asset.sourceScript || undefined,
-      capability: capabilityFor(asset),
-      native_w_mm: 100,
-      native_h_mm: 75,
-      mtime: 0,
-      preview_url: asset.previewDataUrl ?? null,
-    }
-  })
+  const panels = await Promise.all((open.assets ?? [])
+    .filter((asset) => !(asset.mime ?? '').toLowerCase().includes('python') && asset.sourceKind !== 'python' && visibleMaterial(asset))
+    .map((asset) => importedPanel(asset, open.project)))
+  if (epoch !== materialEpoch) return { panelId: null }
   pendingSourceOf.clear()
   for (const asset of open.assets ?? []) {
     if (asset.sourceStem && open.project) pendingSourceOf.set(asset.id, { project: open.project, stem: asset.sourceStem })
@@ -333,6 +357,7 @@ export function installMcpTransport(bridge: AppsBridge): () => void {
  * 不许各自复制然后漂移）；MCP 特有的只有「fileId ↔ session_id」这张表。
  */
 export function seedSession(open: OpenFigureResult): { panelId: string; fileId: string } {
+  ++materialEpoch
   staticPreviewOf.clear()
   sessionOf.set(fileIdFor(open.stem), open.session_id)
   // 打开就是 raster 的图（#181 那一类）：第一帧的位图也在这次响应里。
@@ -392,22 +417,10 @@ export async function appendImportedMaterial(
   // scripts can read them, but they are not visual materials. Keep the same
   // filtering rule for a live import as for the initial project hydrate.
   if (!imported.id || !visibleMaterial(imported)) return
-  const mime = imported.mime?.toLowerCase() ?? ''
+  const epoch = materialEpoch
   const fileId = imported.id
-  const info: PanelInfo = {
-    id: fileId,
-    name: imported.name,
-    folder: project,
-    kind: mime === 'application/pdf' || mime.includes('svg') ? 'pdf' : 'raster',
-    source_path: imported.relativePath ? `${project}/${imported.relativePath}` : undefined,
-    mime: imported.mime,
-    capability: capabilityFor(imported),
-    native_w_mm: 100,
-    native_h_mm: 75,
-    mtime: 0,
-    script: imported.sourceScript || undefined,
-    preview_url: imported.previewDataUrl ?? null,
-  }
+  const info = await importedPanel(imported, project)
+  if (epoch !== materialEpoch || useAssetStore.getState().figuresDir !== project) return
   useAssetStore.setState((s) => ({
     byId: { ...s.byId, [fileId]: info },
     panels: s.panels.some((p) => p.id === fileId) ? s.panels : [...s.panels, info],
