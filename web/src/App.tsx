@@ -110,6 +110,8 @@ function Workspace() {
   useSelectionRouting()
   const outdated = useBuildVersion()
 
+  useEffect(() => useAiStore.getState().installHostBridge(), [])
+
   // 快速编辑不显示画布标签行：那是排版的语言（哪几张版、当前在哪一张），
   // 而这条工作流里用户面对的只有一张图。
   const fastEdit = useWorkspaceStore((s) => s.mode === 'fast_edit')

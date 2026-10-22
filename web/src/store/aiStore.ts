@@ -15,6 +15,12 @@ import {
   type AiRefreshOutcome,
 } from '@/lib/api'
 import type { UiMessage } from '@/i18n'
+import {
+  isOmicosHostEmbedded,
+  requestOmicosFigureAi,
+  subscribeOmicosFigureAi,
+  type OmicosFigureAiRequest,
+} from '@/lib/omicosHost'
 
 export type AiStatus = 'running' | 'done' | 'failed' | 'timeout' | 'cancelled' | 'reverted'
 /** 改动作用范围：决定发给后端的上下文粒度（gid/label 怎么拼） */
@@ -87,6 +93,7 @@ interface AiState {
     target: string
     overrides: unknown[]
     canvas?: string | null
+    script?: string | null
   }) => Promise<void>
   appendDelta: (sid: string, kind: AiDeltaKind, text: string) => void
   finish: (p: {
@@ -101,11 +108,16 @@ interface AiState {
   revert: (sid: string) => Promise<void>
   cancel: (sid: string) => Promise<void>
   clear: () => void
+  installHostBridge: () => () => void
 }
 
 const MAX_LINES = 600
 const LS_AGENT = 'tavotto.ai.agent'
 const LS_PREFS = 'tavotto.ai.prefs'
+
+function hostSessionId(): string {
+  return `omicos-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
 
 /**
  * 记住的首选 Agent。**不再拿硬编码联合类型校验**：合法性只有后端的注册表
@@ -113,9 +125,25 @@ const LS_PREFS = 'tavotto.ai.prefs'
  * 崩——`effectiveAgent` 会落到第一个可用的，而用户的首选值留着。
  */
 function readAgent(): AiAgentId | null {
-  // Figure Studio is an OmicOS-native surface.  Ignore legacy Codex/Claude
-  // preferences from older workbench builds so the first open is deterministic.
-  return 'omicos'
+  // The embedded App is an OmicOS-native surface. Standalone Tavotto keeps
+  // its local CLI preference, while the host path never advertises Codex or
+  // Claude as a second assistant.
+  if (isOmicosHostEmbedded()) return 'omicos'
+  try { return localStorage.getItem(LS_AGENT) || 'codex' } catch { return 'codex' }
+}
+
+const HOST_CAPABILITIES: AiCapabilities = {
+  agents: [{
+    id: 'omicos', display_name: 'OmicOS', icon_key: 'omicos',
+    state: 'ready', installed: true, enabled: true, usable: true,
+    version: 'host', executable_path: null, path_override: null,
+    detection_source: 'omicos_host', models: [], default_model: null,
+    efforts: [], default_effort: null, endpoint: null, active_endpoint_id: null,
+    features: { third_party_endpoints: false, model_selection: false,
+      effort_selection: false, wire_api_selection: false, readiness_probe: false },
+    diagnostics: { searched: [], broken_path: null, readiness: 'ready', readiness_detail: null },
+  }],
+  endpoints: [], presets: [], checked_at_ms: Date.now(),
 }
 
 function readPrefs(): { models: AiState['models']; efforts: AiState['efforts'] } {
@@ -175,6 +203,10 @@ export const useAiStore = create<AiState>((set, get) => ({
    * 设置页据此显示一条非破坏性提示（aria-live），启动那次静默吞掉。
    */
   loadCaps: async (refresh = false) => {
+    if (isOmicosHostEmbedded()) {
+      set({ caps: HOST_CAPABILITIES, agent: 'omicos' })
+      return
+    }
     const caps = await fetchAiCapabilities(refresh)
     set((s) => {
       // 记忆里的模型/强度若已不在该 Agent 当前的清单里就丢弃，回落到默认值
@@ -214,7 +246,34 @@ export const useAiStore = create<AiState>((set, get) => ({
     })
   },
 
-  start: async ({ prompt, fileId, panelId, gid, label, scope, target, overrides, canvas }) => {
+  start: async ({ prompt, fileId, panelId, gid, label, scope, target, overrides, canvas, script }) => {
+    if (isOmicosHostEmbedded()) {
+      const request: OmicosFigureAiRequest = {
+        prompt, fileId, panelId, gid, label, scope, target, overrides, canvas,
+        script: script || fileId,
+      }
+      const res = await requestOmicosFigureAi(request)
+      const session: AiSession = {
+        id: String(res.session || hostSessionId()),
+        agent: 'omicos',
+        agentLabel: 'OmicOS',
+        prompt,
+        script: fileId,
+        panelId,
+        fileId,
+        gid,
+        scope,
+        target,
+        entries: [],
+        status: 'running',
+        changed: false,
+        diff: '',
+        renderError: null,
+        startedAt: Date.now(),
+      }
+      set((s) => ({ sessions: [...s.sessions, session] }))
+      return
+    }
     // 发任务前再确认一次：首选那个可能刚被关掉 / 刚被检测成不可用
     const caps = get().caps
     const agent = effectiveAgent(get().agent, caps)
@@ -318,13 +377,34 @@ export const useAiStore = create<AiState>((set, get) => ({
   },
 
   cancel: async (sid) => {
-    await aiCancel(sid)
+    if (isOmicosHostEmbedded()) {
+      window.parent.postMessage({ type: 'omicos:figure-ai-cancel', version: 1, session: sid }, '*')
+    } else {
+      await aiCancel(sid)
+    }
     set((s) => ({
       sessions: s.sessions.map((x) => (x.id === sid ? { ...x, status: 'cancelled' } : x)),
     }))
   },
 
   clear: () => set({ sessions: [] }),
+
+  installHostBridge: () => {
+    if (!isOmicosHostEmbedded()) return () => {}
+    return subscribeOmicosFigureAi((event) => {
+      const state = useAiStore.getState()
+      if (event.kind && event.text) state.appendDelta(event.session, event.kind, event.text)
+      if (event.status) {
+        state.finish({
+          session: event.session,
+          status: event.status,
+          changed: !!event.changed,
+          diff: event.diff || '',
+          error: event.error,
+        })
+      }
+    })
+  },
 }))
 
 /** 会话标签：优先用当前 capabilities 的显示名，探测不可用时回退到快照。 */

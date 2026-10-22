@@ -63,6 +63,7 @@ import { Select } from '../ui/Select'
 import { Tip } from '../ui/Tooltip'
 import { DiffView } from './DiffView'
 import { Markdown } from './Markdown'
+import { isOmicosHostEmbedded } from '@/lib/omicosHost'
 
 /** 右栏标签名与图标：tab bar 引用这里，改名只改这一处 */
 export const assistantTabLabel = () => translate('tabLabel', { ns: 'ai' })
@@ -175,6 +176,7 @@ export function AssistantPanel() {
   const storedScope = useAiStore((s) => s.scope)
   const { panel, element, axes } = useAssistantTarget()
   const caps = useAiStore((s) => s.caps)
+  const hostEmbedded = isOmicosHostEmbedded()
   const [prompt, setPrompt] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
@@ -298,6 +300,7 @@ export function AssistantPanel() {
         target: ctx.target,
         overrides: panel.overrides,
         canvas: useDocumentStore.getState().activeCanvasId,
+        script: panel.script,
       })
       setPrompt('')
     } catch (e) {
@@ -321,17 +324,19 @@ export function AssistantPanel() {
         ) : (
           <span className="min-w-0 flex-1" />
         )}
-        <Tip label={ai('panel.taskHistory')}>
-          <Button
-            size="icon-sm"
-            className="shrink-0"
-            onClick={() => setHistoryOpen((v) => !v)}
-            aria-label={ai('panel.taskHistory')}
-            aria-expanded={historyOpen}
-          >
-            <RotateCcwClock size={ICON_SIZE.sm} className="text-ink-2" />
-          </Button>
-        </Tip>
+        {!hostEmbedded && (
+          <Tip label={ai('panel.taskHistory')}>
+            <Button
+              size="icon-sm"
+              className="shrink-0"
+              onClick={() => setHistoryOpen((v) => !v)}
+              aria-label={ai('panel.taskHistory')}
+              aria-expanded={historyOpen}
+            >
+              <RotateCcwClock size={ICON_SIZE.sm} className="text-ink-2" />
+            </Button>
+          </Tip>
+        )}
       </div>
 
       <div ref={stageRef} className="relative min-h-0 flex-1">
@@ -377,7 +382,7 @@ export function AssistantPanel() {
             </IconButton>
           </div>
         )}
-        {historyOpen && <TaskHistory onClose={() => setHistoryOpen(false)} />}
+        {!hostEmbedded && historyOpen && <TaskHistory onClose={() => setHistoryOpen(false)} />}
 
         {/* 输入区浮在对话流的底部（absolute），内容从它底下滚过；玻璃在下面那个框上 */}
         <div ref={composerRef} className="absolute inset-x-0 bottom-0 z-30 px-3 pb-3 pt-1">
@@ -441,13 +446,17 @@ export function AssistantPanel() {
             )}
           />
           <div className="flex items-center gap-1 px-1.5 pb-1.5">
-            <ScopeAgentButton
-              panel={panel}
-              element={element}
-              axes={axes}
-              scope={scope}
-              scopes={scopes}
-            />
+            {hostEmbedded ? (
+              <span className="px-1.5 text-xs text-ink-2">OmicOS</span>
+            ) : (
+              <ScopeAgentButton
+                panel={panel}
+                element={element}
+                axes={axes}
+                scope={scope}
+                scopes={scopes}
+              />
+            )}
             {/* 快捷键只说一次：发送钮的气泡里已经有「⌘↵」，输入框上不再常驻一枚键帽
                 （打磨 A5——已表达过的不重复） */}
             <span className="ml-auto" />
@@ -1086,6 +1095,7 @@ function groupEntries(entries: AiEntry[]): Group[] {
 function SessionBlock({ session }: { session: AiSession }) {
   useTranslation('ai')
   const caps = useAiStore((s) => s.caps)
+  const hostEmbedded = isOmicosHostEmbedded()
   const running = session.status === 'running'
   const groups = groupEntries(session.entries)
 
@@ -1141,7 +1151,7 @@ function SessionBlock({ session }: { session: AiSession }) {
         <p className="text-xs text-danger">{ai('session.refreshFailed')}</p>
       )}
 
-      {session.changed && session.diff && (
+      {!hostEmbedded && session.changed && session.diff && (
         <div className="flex animate-settle-in flex-col gap-1.5">
           <DiffView diff={session.diff} script={session.script} />
           {/* destructive 只有红字 ghost（第五节）：此前是 secondary + 撑满 + 红字，

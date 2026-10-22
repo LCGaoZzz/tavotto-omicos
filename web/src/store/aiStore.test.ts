@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentById, effectiveAgent, usableAgents, type AiCapabilities } from '@/lib/api'
 import { hasUsableAgent, prunePrefs, sessionAgentLabel, useAiStore } from './aiStore'
 
@@ -169,5 +169,46 @@ describe('loadCaps', () => {
     useAiStore.getState().setAgent('opencode')
     expect(localStorage.getItem('tavotto.ai.agent')).toBe('opencode')
     expect(useAiStore.getState().agent).toBe('opencode')
+  })
+})
+
+describe('OmicOS embedded host bridge', () => {
+  let originalParent: Window
+
+  afterEach(() => {
+    Object.defineProperty(window, 'parent', { configurable: true, value: originalParent })
+    useAiStore.setState({ sessions: [], caps: null, agent: null })
+  })
+
+  it('uses a synthetic OmicOS capability and delegates the edit without browser API calls', async () => {
+    originalParent = window.parent
+    const messages: any[] = []
+    const parent = { postMessage: (message: unknown) => messages.push(message) }
+    Object.defineProperty(window, 'parent', { configurable: true, value: parent })
+
+    await useAiStore.getState().loadCaps()
+    expect(useAiStore.getState().agent).toBe('omicos')
+    expect(useAiStore.getState().caps?.agents.map((agent) => agent.id)).toEqual(['omicos'])
+
+    const pending = useAiStore.getState().start({
+      prompt: '统一字体', fileId: 'fig.py', panelId: 'panel-1', gid: null, label: null,
+      scope: 'figure', target: '整张图', overrides: [], script: 'print(1)',
+    })
+    expect(messages[0]).toMatchObject({ type: 'omicos:figure-ai-request', request: { script: 'print(1)' } })
+    const response = new MessageEvent('message', {
+      data: { type: 'omicos:figure-ai-response', version: 1, id: messages[0].id, ok: true, session: 'host-session' },
+      source: parent as any,
+    })
+    window.dispatchEvent(response)
+    await pending
+    expect(useAiStore.getState().sessions[0]).toMatchObject({ id: 'host-session', agent: 'omicos', status: 'running' })
+
+    const stop = useAiStore.getState().installHostBridge()
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: 'omicos:figure-ai-event', version: 1, session: 'host-session', kind: 'message', text: '完成', status: 'done', changed: true },
+      source: parent as any,
+    }))
+    expect(useAiStore.getState().sessions[0]).toMatchObject({ status: 'done', changed: true, entries: [{ text: '完成' }] })
+    stop()
   })
 })
