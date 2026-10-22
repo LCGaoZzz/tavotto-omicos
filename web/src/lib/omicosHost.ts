@@ -1,6 +1,82 @@
 /** Cosmetic host context only. This never authorizes source execution or APIs. */
 import { i18n, initI18n } from '@/i18n'
 
+export interface OmicosFigureAiRequest {
+  prompt: string
+  fileId: string
+  panelId: string
+  gid: string | null
+  label: string | null
+  scope: 'element' | 'axes' | 'figure'
+  target: string
+  overrides: unknown[]
+  canvas?: string | null
+  script?: string | null
+}
+
+export interface OmicosFigureAiEvent {
+  session: string
+  kind?: 'delta' | 'message' | 'thinking' | 'action'
+  text?: string
+  status?: string
+  changed?: boolean
+  diff?: string
+  error?: string
+}
+
+export interface OmicosFigureAiReply {
+  ok: boolean
+  session?: string
+  error?: string
+}
+
+const FIGURE_AI_VERSION = 1
+
+export function isOmicosHostEmbedded(): boolean {
+  return typeof window !== 'undefined' && window.parent !== window
+}
+
+function requestId(): string {
+  try { return crypto.randomUUID() } catch { return `figure-ai-${Date.now()}-${Math.random().toString(36).slice(2)}` }
+}
+
+/** Ask the containing OmicOS workbench to run one ephemeral figure edit. */
+export function requestOmicosFigureAi(request: OmicosFigureAiRequest): Promise<OmicosFigureAiReply> {
+  if (!isOmicosHostEmbedded()) return Promise.reject(new Error('OmicOS host bridge unavailable'))
+  const id = requestId()
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      window.removeEventListener('message', onMessage)
+      reject(new Error('OmicOS host bridge timed out'))
+    }, 30000)
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== window.parent) return
+      const data = event.data
+      if (!data || data.type !== 'omicos:figure-ai-response' || data.version !== FIGURE_AI_VERSION || data.id !== id) return
+      window.clearTimeout(timer)
+      window.removeEventListener('message', onMessage)
+      const reply = data as OmicosFigureAiReply
+      if (reply.ok) resolve(reply)
+      else reject(new Error(reply.error || 'OmicOS figure assistant failed'))
+    }
+    window.addEventListener('message', onMessage)
+    window.parent.postMessage({ type: 'omicos:figure-ai-request', version: FIGURE_AI_VERSION, id, request }, '*')
+  })
+}
+
+/** Subscribe to completion/delta events for an accepted host-side edit. */
+export function subscribeOmicosFigureAi(handler: (event: OmicosFigureAiEvent) => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+  const onMessage = (event: MessageEvent) => {
+    if (event.source !== window.parent) return
+    const data = event.data
+    if (!data || data.type !== 'omicos:figure-ai-event' || data.version !== FIGURE_AI_VERSION) return
+    handler(data as OmicosFigureAiEvent)
+  }
+  window.addEventListener('message', onMessage)
+  return () => window.removeEventListener('message', onMessage)
+}
+
 export const HOST_TOKEN_PROPERTIES: Record<string, string> = {
   '--oc-bg': 'color', '--oc-surface': 'color', '--oc-raised': 'color',
   '--oc-overlay': 'color', '--oc-border': 'color', '--oc-border-hi': 'color',
